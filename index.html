@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Si_MapBalance - Interactive Tool</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="sidebar">
+      <h2>Map Balance Tool</h2>
+
+      <!-- Map Selection -->
+      <div class="sidebar-section">
+        <h3>Map</h3>
+        <select id="map-selector"></select>
+      </div>
+
+      <!-- Layer Toggles -->
+      <div class="sidebar-section">
+        <h3>Layers</h3>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-grid" checked>
+          <label for="layer-grid">Coordinate Grid</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-balterium" checked>
+          <label for="layer-balterium">Balterium Patches</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-biotics" checked>
+          <label for="layer-biotics">Biotics Patches</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-hq-sol">
+          <label for="layer-hq-sol">HQ Zones (Sol)</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-hq-cent">
+          <label for="layer-hq-cent">HQ Zones (Cent)</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-ref-sol">
+          <label for="layer-ref-sol">Refinery Zones (Sol)</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-ref-cent">
+          <label for="layer-ref-cent">Refinery Zones (Cent)</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-ref-access" checked>
+          <label for="layer-ref-access">Refinery Access Indicators</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-nobuild">
+          <label for="layer-nobuild">No-Build Zones (Resource Extents)</label>
+        </div>
+      </div>
+
+      <!-- Placement Tools -->
+      <div class="sidebar-section">
+        <h3>Placement</h3>
+        <button class="btn btn-sol" id="btn-place-sol">Place Sol HQ</button>
+        <button class="btn btn-cent" id="btn-place-cent">Place Cent HQ</button>
+        <button class="btn btn-alien" id="btn-place-alien">Place Alien Nest</button>
+        <button class="btn btn-sol" id="btn-expand-sol">Add Sol Expansion</button>
+        <button class="btn btn-cent" id="btn-expand-cent">Add Cent Expansion</button>
+        <button class="btn btn-alien" id="btn-expand-alien">Add Alien Node</button>
+        <button class="btn btn-alien" id="btn-place-biocache">Add Biocache</button>
+        <button class="btn btn-clear" id="btn-clear">Clear All</button>
+        <div class="layer-toggle" style="margin-top:6px;">
+          <input type="checkbox" id="setting-restrict-hq" checked>
+          <label for="setting-restrict-hq">Restrict to HQ Zones</label>
+        </div>
+      </div>
+
+      <!-- Structure Footprints -->
+      <div class="sidebar-section">
+        <h3>Footprints <span id="fp-rotation-indicator" style="font-size:10px;color:#888;">(0°)</span></h3>
+        <button class="btn btn-sol" id="btn-fp-sol-hq">Sol HQ</button>
+        <button class="btn btn-cent" id="btn-fp-cent-hq">Cent HQ</button>
+        <button class="btn btn-sol" id="btn-fp-sol-ref">Sol Refinery</button>
+        <button class="btn btn-cent" id="btn-fp-cent-ref">Cent Refinery</button>
+        <button class="btn btn-alien" id="btn-fp-alien-nest">Alien Nest</button>
+        <div style="font-size:11px;color:#556;margin-top:4px;">R to rotate · Click placed to rotate · Right-click to remove</div>
+      </div>
+
+      <!-- Resource Amounts -->
+      <div class="sidebar-section">
+        <h3>Resource Amounts</h3>
+        <div class="setting-row">
+          <span>Balterium</span>
+          <input type="range" id="setting-balt-amount" min="0" max="100000" value="40000" step="1000">
+          <span class="setting-value" id="val-balt-amount">40K</span>
+        </div>
+        <div class="setting-row">
+          <span>Biotics</span>
+          <input type="range" id="setting-bio-amount" min="0" max="100000" value="42000" step="1000">
+          <span class="setting-value" id="val-bio-amount">42K</span>
+        </div>
+        <div style="font-size:11px;color:#556;margin-top:4px;">Right-click patch to mark for exclusion</div>
+        <div id="resource-totals" style="font-size:11px;color:#8899aa;margin-top:6px;"></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="sidebar-section">
+        <h3>Settings</h3>
+        <div class="setting-row">
+          <span>Build Radius</span>
+          <input type="range" id="setting-build-radius" min="400" max="700" value="550" step="10">
+          <span class="setting-value" id="val-build-radius">550m</span>
+        </div>
+        <div class="setting-row">
+          <span>Chain Range</span>
+          <input type="range" id="setting-chain-range" min="1000" max="1600" value="1300" step="10">
+          <span class="setting-value" id="val-chain-range">1300m</span>
+        </div>
+        <div class="setting-row">
+          <span>Node Radius</span>
+          <input type="range" id="setting-node-radius" min="50" max="400" value="150" step="10">
+          <span class="setting-value" id="val-node-radius">150m</span>
+        </div>
+        <div class="setting-row">
+          <span>Biocache Radius</span>
+          <input type="range" id="setting-biocache-radius" min="50" max="400" value="150" step="10">
+          <span class="setting-value" id="val-biocache-radius">150m</span>
+        </div>
+      </div>
+
+      <!-- Balance Panel -->
+      <div class="sidebar-section">
+        <h3>Balance Analysis</h3>
+        <div id="balance-panel">
+          <p style="color:#555;font-size:12px;">Place both HQs to see analysis</p>
+        </div>
+      </div>
+
+      <!-- Game Modes -->
+      <div class="sidebar-section">
+        <h3>Game Modes</h3>
+        <div class="layer-toggle">
+          <input type="checkbox" id="mode-hvh" checked>
+          <label for="mode-hvh">HvH</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="mode-hva" checked>
+          <label for="mode-hva">HvA</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="mode-hvhva" checked>
+          <label for="mode-hvhva">HvHvA</label>
+        </div>
+      </div>
+
+      <!-- Export / Import -->
+      <div class="sidebar-section">
+        <button class="btn btn-clear" id="btn-export">Export Layout JSON</button>
+        <button class="btn btn-clear" id="btn-load" style="margin-top:4px;">Load Layout JSON</button>
+        <input type="file" id="file-load" accept=".json" style="display:none;">
+      </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="coords-bar">X: --- Z: ---</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/map_config.js"></script>
+  <script src="js/layers.js"></script>
+  <script src="js/placement.js"></script>
+  <script src="js/expansion.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

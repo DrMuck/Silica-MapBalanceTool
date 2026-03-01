@@ -1,0 +1,27 @@
+{
+  "map": "NorthPolarCap",
+  "description": "NorthPolarCap with 40K Balterium, 42K Biotics, balanced spawns",
+  "resources": {
+    "balterium_amount": 40000,
+    "biotics_amount": 42000,
+    "removed_patches": [136]
+  },
+  "spawns": {
+    "variant_A": {
+      "description": "Sol south, Cent north",
+      "Sol": { "x": -1305, "z": -1260 },
+      "Cent": { "x": -1395, "z": 1125 },
+      "Alien": null
+    },
+    "variant_B": {
+      "description": "Sol north, Cent south (swapped)",
+      "Sol": { "x": -1395, "z": 1125 },
+      "Cent": { "x": -1305, "z": -1260 },
+      "Alien": null
+    }
+  },
+  "settings": {
+    "buildRadius": 550,
+    "chainRange": 1300
+  }
+}
