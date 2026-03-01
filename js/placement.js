@@ -56,41 +56,38 @@ const Placement = (() => {
   //   bit 6: rampA@rot270, bit 7: rampB@rot270
   //
   // rampSide: which dimension has ramps at rot=0 ('h' for Sol=Z edges, 'w' for Cent=X edges)
-  // rampMapping: bit indices for each edge per footprint orientation
-  //   minus/plus refer to sign=-1/+1 edge in drawRampIndicators
+  // rampData[i]: per-rotation ramp config (i=0..3 for 0°/90°/180°/270°)
+  //   edgeOffset: offset along the edge perpendicular to ramps (from structure center)
+  //   minus/plus: bit indices for the -1/+1 edge in drawRampIndicators
   const FOOTPRINTS = {
     'sol-hq':     { w: 76,  h: 111, color: '#328cff', label: 'Sol HQ' },
     'cent-hq':    { w: 47,  h: 75,  color: '#eb4646', label: 'Cent HQ' },
     'sol-ref':    { w: 152, h: 96,  color: '#328cff', label: 'Sol Ref', hasRamps: true,
       rampSide: 'h', faction: 'Sol',
-      // Ramp entry offset along the edge (from structure center)
-      // Sol ramp entries at local (25.52, ±57): offset +25.52 in X at rot=0
-      // unrotated (Z edges): lng offset = +25.52
-      // rotated (X edges): lat offset = -25.52 (90° rotation: x→-z)
-      rampEdgeOffset: { unrotated: 25.52, rotated: -25.52 },
-      rampMapping: {
-        unrotated: { minus: [0, 5], plus: [1, 4] },
-        rotated: { minus: [2, 7], plus: [3, 6] },
-      },
+      // Sol ramp entries at local (25.52, ±57)
+      rampData: [
+        { edgeOffset:  25.52, minus: [0], plus: [1] }, // 0°:   Z edges, offset +25.52 along X
+        { edgeOffset: -25.52, minus: [2], plus: [3] }, // 90°:  X edges, offset -25.52 along Z
+        { edgeOffset: -25.52, minus: [5], plus: [4] }, // 180°: Z edges, offset -25.52 along X
+        { edgeOffset:  25.52, minus: [7], plus: [6] }, // 270°: X edges, offset +25.52 along Z
+      ],
     },
     'cent-ref':   { w: 64,  h: 116, color: '#eb4646', label: 'Cent Ref', hasRamps: true,
       rampSide: 'w', faction: 'Cent',
-      // Ramp entry offset along the edge (from structure center)
-      // Cent ramp entries at local (±55, -34.20): offset -34.20 in Z at rot=0
-      // unrotated (X edges): lat offset = -34.20
-      // rotated (Z edges): lng offset = -34.20 (90° rotation: z→-x, but symmetric)
-      rampEdgeOffset: { unrotated: -34.20, rotated: -34.20 },
-      rampMapping: {
-        unrotated: { minus: [0, 5], plus: [1, 4] },
-        rotated: { minus: [3, 6], plus: [2, 7] },
-      },
+      // Cent ramp entries at local (±55, -34.20)
+      rampData: [
+        { edgeOffset: -34.20, minus: [0], plus: [1] }, // 0°:   X edges, offset -34.20 along Z
+        { edgeOffset: -34.20, minus: [3], plus: [2] }, // 90°:  Z edges, offset -34.20 along X
+        { edgeOffset:  34.20, minus: [5], plus: [4] }, // 180°: X edges, offset +34.20 along Z
+        { edgeOffset:  34.20, minus: [6], plus: [7] }, // 270°: Z edges, offset +34.20 along X
+      ],
     },
     'alien-nest': { w: 50,  h: 50,  color: '#50c832', label: 'Nest' },
   };
 
   // Footprint state
-  let footprints = []; // [{marker, rect, type, rotated, w, h}]
-  let footprintRotated = false;
+  let footprints = []; // [{marker, rect, type, rotation, w, h}]
+  let footprintRotation = 0; // 0=0°, 1=90°, 2=180°, 3=270°
 
   // Layer group for all placement visuals
   let placementGroup = null;
@@ -364,32 +361,21 @@ const Placement = (() => {
     const fp = FOOTPRINTS[entry.type];
     if (!fp || !fp.hasRamps) return [];
 
+    const rot = entry.rotation; // 0-3
+    const rd = fp.rampData[rot];
+
     // Determine which axis ramps are on:
-    // rampSide='h': ramps on h-dimension (lat/Z when not rotated, lng/X when rotated)
-    // rampSide='w': ramps on w-dimension (lng/X when not rotated, lat/Z when rotated)
-    let rampOnLat;
-    if (fp.rampSide === 'h') {
-      rampOnLat = !entry.rotated;
-    } else {
-      rampOnLat = entry.rotated;
-    }
+    // rampSide='h': ramps on lat (Z) at rot 0°/180°, on lng (X) at 90°/270°
+    // rampSide='w': ramps on lng (X) at rot 0°/180°, on lat (Z) at 90°/270°
+    const isOdd = rot % 2 === 1;
+    const rampOnLat = (fp.rampSide === 'h') ? !isOdd : isOdd;
 
     // Look up terrain-based ramp accessibility
     const mapName = App.getCurrentMap();
-    const worldX = latlng.lng;
-    const worldZ = latlng.lat;
-    const flags = Layers.getRampFlags(fp.faction, mapName, worldX, worldZ);
+    const flags = Layers.getRampFlags(fp.faction, mapName, latlng.lng, latlng.lat);
 
-    // Determine per-edge accessibility from ramp flags
-    const orient = entry.rotated ? fp.rampMapping.rotated : fp.rampMapping.unrotated;
-    const minusOk = flags === null || orient.minus.some(bit => (flags >> bit) & 1);
-    const plusOk = flags === null || orient.plus.some(bit => (flags >> bit) & 1);
-    const rampAccess = { [-1]: minusOk, [1]: plusOk };
-
-    // Ramp entry offset along the edge (from structure center)
-    const edgeOffset = fp.rampEdgeOffset
-      ? (entry.rotated ? fp.rampEdgeOffset.rotated : fp.rampEdgeOffset.unrotated)
-      : 0;
+    const minusOk = flags === null || rd.minus.some(bit => (flags >> bit) & 1);
+    const plusOk = flags === null || rd.plus.some(bit => (flags >> bit) & 1);
 
     const arrowLen = 20;
     const arrowSpread = 10;
@@ -398,42 +384,36 @@ const Placement = (() => {
     if (rampOnLat) {
       // Ramps on Z+/Z- edges (lat axis), offset along lng
       for (const sign of [-1, 1]) {
-        const ok = rampAccess[sign];
+        const ok = sign === -1 ? minusOk : plusOk;
         const color = ok ? '#00cc00' : '#ff4444';
         const edgeLat = latlng.lat + sign * entry.h / 2;
-        const rampLng = latlng.lng + edgeOffset;
+        const rampLng = latlng.lng + rd.edgeOffset;
         const tri = L.polygon([
           [edgeLat, rampLng - arrowSpread],
           [edgeLat, rampLng + arrowSpread],
           [edgeLat + sign * arrowLen, rampLng],
         ], {
-          color: color,
-          fillColor: color,
+          color, fillColor: color,
           fillOpacity: ok ? 0.5 : 0.3,
-          weight: 1.5,
-          opacity: 0.8,
-          interactive: false,
+          weight: 1.5, opacity: 0.8, interactive: false,
         }).addTo(placementGroup);
         indicators.push(tri);
       }
     } else {
       // Ramps on X+/X- edges (lng axis), offset along lat
       for (const sign of [-1, 1]) {
-        const ok = rampAccess[sign];
+        const ok = sign === -1 ? minusOk : plusOk;
         const color = ok ? '#00cc00' : '#ff4444';
         const edgeLng = latlng.lng + sign * entry.w / 2;
-        const rampLat = latlng.lat + edgeOffset;
+        const rampLat = latlng.lat + rd.edgeOffset;
         const tri = L.polygon([
           [rampLat - arrowSpread, edgeLng],
           [rampLat + arrowSpread, edgeLng],
           [rampLat, edgeLng + sign * arrowLen],
         ], {
-          color: color,
-          fillColor: color,
+          color, fillColor: color,
           fillOpacity: ok ? 0.5 : 0.3,
-          weight: 1.5,
-          opacity: 0.8,
-          interactive: false,
+          weight: 1.5, opacity: 0.8, interactive: false,
         }).addTo(placementGroup);
         indicators.push(tri);
       }
@@ -441,13 +421,21 @@ const Placement = (() => {
     return indicators;
   }
 
+  const ROT_LABELS = ['', ' (90°)', ' (180°)', ' (270°)'];
+
+  function getFootprintDims(fp, rotation) {
+    // 0°/180° use original w,h; 90°/270° swap
+    return (rotation % 2 === 0)
+      ? { w: fp.w, h: fp.h }
+      : { w: fp.h, h: fp.w };
+  }
+
   function placeFootprint(type, latlng) {
     const fp = FOOTPRINTS[type];
     if (!fp) return;
 
-    const rotated = footprintRotated;
-    const w = rotated ? fp.h : fp.w; // X dimension (lng)
-    const h = rotated ? fp.w : fp.h; // Z dimension (lat)
+    const rotation = footprintRotation;
+    const { w, h } = getFootprintDims(fp, rotation);
 
     const bounds = [
       [latlng.lat - h / 2, latlng.lng - w / 2],
@@ -477,14 +465,14 @@ const Placement = (() => {
       zIndexOffset: 200,
     }).addTo(placementGroup);
 
-    marker.bindTooltip(fp.label + (rotated ? ' (90°)' : ''), {
+    marker.bindTooltip(fp.label + ROT_LABELS[rotation], {
       permanent: false,
       direction: 'top',
       offset: [0, -6],
       className: 'grid-label',
     });
 
-    const entry = { marker, rect, type, rotated, w, h, rampIndicators: [] };
+    const entry = { marker, rect, type, rotation, w, h, rampIndicators: [] };
     entry.rampIndicators = drawRampIndicators(latlng, entry);
     footprints.push(entry);
 
@@ -497,25 +485,22 @@ const Placement = (() => {
         [newLatLng.lat + entry.h / 2, newLatLng.lng + entry.w / 2],
       ];
       rect.setBounds(newBounds);
-      // Redraw ramp indicators
       entry.rampIndicators.forEach(ind => placementGroup.removeLayer(ind));
       entry.rampIndicators = drawRampIndicators(newLatLng, entry);
     });
 
-    // Click to toggle rotation
+    // Click to advance rotation (0→90→180→270→0)
     marker.on('click', () => {
-      const tmpW = entry.w;
-      entry.w = entry.h;
-      entry.h = tmpW;
-      entry.rotated = !entry.rotated;
+      entry.rotation = (entry.rotation + 1) % 4;
+      const dims = getFootprintDims(fp, entry.rotation);
+      entry.w = dims.w;
+      entry.h = dims.h;
       const pos = marker.getLatLng();
-      const newBounds = [
+      rect.setBounds([
         [pos.lat - entry.h / 2, pos.lng - entry.w / 2],
         [pos.lat + entry.h / 2, pos.lng + entry.w / 2],
-      ];
-      rect.setBounds(newBounds);
-      marker.setTooltipContent(fp.label + (entry.rotated ? ' (90°)' : ''));
-      // Redraw ramp indicators
+      ]);
+      marker.setTooltipContent(fp.label + ROT_LABELS[entry.rotation]);
       entry.rampIndicators.forEach(ind => placementGroup.removeLayer(ind));
       entry.rampIndicators = drawRampIndicators(pos, entry);
     });
@@ -530,8 +515,8 @@ const Placement = (() => {
   }
 
   function toggleFootprintRotation() {
-    footprintRotated = !footprintRotated;
-    return footprintRotated;
+    footprintRotation = (footprintRotation + 1) % 4;
+    return footprintRotation;
   }
 
   function clearAll() {
@@ -595,11 +580,11 @@ const Placement = (() => {
     addHQ(faction, latlng, isSpawn, null, isBiocache || false);
   }
 
-  function placeFootprintAt(type, x, z, rotated) {
-    const savedRotation = footprintRotated;
-    footprintRotated = rotated;
+  function placeFootprintAt(type, x, z, rotation) {
+    const saved = footprintRotation;
+    footprintRotation = rotation;
     placeFootprint(type, L.latLng(z, x));
-    footprintRotated = savedRotation;
+    footprintRotation = saved;
   }
 
   function getHQs() { return hqs; }
@@ -626,7 +611,7 @@ const Placement = (() => {
       type: fp.type,
       x: fp.marker.getLatLng().lng,
       z: fp.marker.getLatLng().lat,
-      rotated: fp.rotated,
+      rotation: fp.rotation,
     }));
 
     // Resource config

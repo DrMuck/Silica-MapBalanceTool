@@ -142,9 +142,9 @@ const UI = (() => {
         Placement.setPlacementMode(null);
       }
       if (e.key === 'r' || e.key === 'R') {
-        const rotated = Placement.toggleFootprintRotation();
+        const rot = Placement.toggleFootprintRotation();
         const indicator = document.getElementById('fp-rotation-indicator');
-        if (indicator) indicator.textContent = rotated ? '(90°)' : '(0°)';
+        if (indicator) indicator.textContent = `(${rot * 90}°)`;
       }
     });
   }
@@ -369,7 +369,9 @@ const UI = (() => {
     // 7. Place footprints
     if (data.footprints && Array.isArray(data.footprints)) {
       for (const fp of data.footprints) {
-        Placement.placeFootprintAt(fp.type, fp.x, fp.z, fp.rotated || false);
+        // Support both old boolean 'rotated' and new integer 'rotation'
+        const rot = fp.rotation !== undefined ? fp.rotation : (fp.rotated ? 1 : 0);
+        Placement.placeFootprintAt(fp.type, fp.x, fp.z, rot);
       }
     }
 
