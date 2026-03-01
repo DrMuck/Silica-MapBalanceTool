@@ -66,39 +66,53 @@ const UI = (() => {
     });
 
     // Settings sliders
-    const buildSlider = document.getElementById('setting-build-radius');
-    const chainSlider = document.getElementById('setting-chain-range');
-    const buildVal = document.getElementById('val-build-radius');
-    const chainVal = document.getElementById('val-chain-range');
-
-    buildSlider.addEventListener('input', () => {
-      const v = parseInt(buildSlider.value);
-      buildVal.textContent = `${v}m`;
-      Placement.setBuildRadius(v);
+    const solBuildSlider = document.getElementById('setting-sol-build-radius');
+    const solBuildVal = document.getElementById('val-sol-build-radius');
+    solBuildSlider.addEventListener('input', () => {
+      const v = parseInt(solBuildSlider.value);
+      solBuildVal.textContent = `${v}m`;
+      Placement.setSolBuildRadius(v);
     });
 
-    chainSlider.addEventListener('input', () => {
-      const v = parseInt(chainSlider.value);
-      chainVal.textContent = `${v}m`;
-      Placement.setChainRange(v);
+    const centBuildSlider = document.getElementById('setting-cent-build-radius');
+    const centBuildVal = document.getElementById('val-cent-build-radius');
+    centBuildSlider.addEventListener('input', () => {
+      const v = parseInt(centBuildSlider.value);
+      centBuildVal.textContent = `${v}m`;
+      Placement.setCentBuildRadius(v);
     });
 
-    // Alien node radius slider
-    const nodeSlider = document.getElementById('setting-node-radius');
-    const nodeVal = document.getElementById('val-node-radius');
-    nodeSlider.addEventListener('input', () => {
-      const v = parseInt(nodeSlider.value);
-      nodeVal.textContent = `${v}m`;
-      Placement.setAlienNodeRadius(v);
+    const solChainSlider = document.getElementById('setting-sol-chain-range');
+    const solChainVal = document.getElementById('val-sol-chain-range');
+    solChainSlider.addEventListener('input', () => {
+      const v = parseInt(solChainSlider.value);
+      solChainVal.textContent = `${v}m`;
+      Placement.setSolChainRange(v);
     });
 
-    // Alien biocache radius slider
-    const biocacheSlider = document.getElementById('setting-biocache-radius');
-    const biocacheVal = document.getElementById('val-biocache-radius');
-    biocacheSlider.addEventListener('input', () => {
-      const v = parseInt(biocacheSlider.value);
-      biocacheVal.textContent = `${v}m`;
-      Placement.setAlienBiocacheRadius(v);
+    const centChainSlider = document.getElementById('setting-cent-chain-range');
+    const centChainVal = document.getElementById('val-cent-chain-range');
+    centChainSlider.addEventListener('input', () => {
+      const v = parseInt(centChainSlider.value);
+      centChainVal.textContent = `${v}m`;
+      Placement.setCentChainRange(v);
+    });
+
+    // Alien chain range sliders (build radius = chain range for aliens)
+    const alienNodeSlider = document.getElementById('setting-alien-node-range');
+    const alienNodeVal = document.getElementById('val-alien-node-range');
+    alienNodeSlider.addEventListener('input', () => {
+      const v = parseInt(alienNodeSlider.value);
+      alienNodeVal.textContent = `${v}m`;
+      Placement.setAlienNodeChainRange(v);
+    });
+
+    const alienBcSlider = document.getElementById('setting-alien-bc-range');
+    const alienBcVal = document.getElementById('val-alien-bc-range');
+    alienBcSlider.addEventListener('input', () => {
+      const v = parseInt(alienBcSlider.value);
+      alienBcVal.textContent = `${v}m`;
+      Placement.setAlienBiocacheChainRange(v);
     });
 
     // Export
@@ -294,25 +308,50 @@ const UI = (() => {
     // 2. Apply settings
     if (data.settings) {
       const s = data.settings;
-      if (s.buildRadius !== undefined) {
-        document.getElementById('setting-build-radius').value = s.buildRadius;
-        document.getElementById('val-build-radius').textContent = `${s.buildRadius}m`;
-        Placement.setBuildRadius(s.buildRadius);
+      // Support old single buildRadius and new per-faction build radii
+      const solBR = s.solBuildRadius ?? s.buildRadius;
+      const centBR = s.centBuildRadius ?? s.buildRadius;
+      if (solBR !== undefined) {
+        document.getElementById('setting-sol-build-radius').value = solBR;
+        document.getElementById('val-sol-build-radius').textContent = `${solBR}m`;
+        Placement.setSolBuildRadius(solBR);
       }
-      if (s.chainRange !== undefined) {
-        document.getElementById('setting-chain-range').value = s.chainRange;
-        document.getElementById('val-chain-range').textContent = `${s.chainRange}m`;
-        Placement.setChainRange(s.chainRange);
+      if (centBR !== undefined) {
+        document.getElementById('setting-cent-build-radius').value = centBR;
+        document.getElementById('val-cent-build-radius').textContent = `${centBR}m`;
+        Placement.setCentBuildRadius(centBR);
       }
-      if (s.alienNodeRadius !== undefined) {
-        document.getElementById('setting-node-radius').value = s.alienNodeRadius;
-        document.getElementById('val-node-radius').textContent = `${s.alienNodeRadius}m`;
-        Placement.setAlienNodeRadius(s.alienNodeRadius);
+      // Support old single chainRange and new per-faction chain ranges
+      if (s.solChainRange !== undefined) {
+        document.getElementById('setting-sol-chain-range').value = s.solChainRange;
+        document.getElementById('val-sol-chain-range').textContent = `${s.solChainRange}m`;
+        Placement.setSolChainRange(s.solChainRange);
+      } else if (s.chainRange !== undefined) {
+        document.getElementById('setting-sol-chain-range').value = s.chainRange;
+        document.getElementById('val-sol-chain-range').textContent = `${s.chainRange}m`;
+        Placement.setSolChainRange(s.chainRange);
       }
-      if (s.alienBiocacheRadius !== undefined) {
-        document.getElementById('setting-biocache-radius').value = s.alienBiocacheRadius;
-        document.getElementById('val-biocache-radius').textContent = `${s.alienBiocacheRadius}m`;
-        Placement.setAlienBiocacheRadius(s.alienBiocacheRadius);
+      if (s.centChainRange !== undefined) {
+        document.getElementById('setting-cent-chain-range').value = s.centChainRange;
+        document.getElementById('val-cent-chain-range').textContent = `${s.centChainRange}m`;
+        Placement.setCentChainRange(s.centChainRange);
+      } else if (s.chainRange !== undefined) {
+        document.getElementById('setting-cent-chain-range').value = s.chainRange;
+        document.getElementById('val-cent-chain-range').textContent = `${s.chainRange}m`;
+        Placement.setCentChainRange(s.chainRange);
+      }
+      // Support old single alienChainRange and new per-type ranges
+      const alienNodeR = s.alienNodeChainRange ?? s.alienChainRange;
+      const alienBcR = s.alienBiocacheChainRange ?? s.alienChainRange;
+      if (alienNodeR !== undefined) {
+        document.getElementById('setting-alien-node-range').value = alienNodeR;
+        document.getElementById('val-alien-node-range').textContent = `${alienNodeR}m`;
+        Placement.setAlienNodeChainRange(alienNodeR);
+      }
+      if (alienBcR !== undefined) {
+        document.getElementById('setting-alien-bc-range').value = alienBcR;
+        document.getElementById('val-alien-bc-range').textContent = `${alienBcR}m`;
+        Placement.setAlienBiocacheChainRange(alienBcR);
       }
     }
 

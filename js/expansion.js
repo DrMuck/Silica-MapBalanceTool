@@ -19,9 +19,6 @@ const Expansion = (() => {
     expansionGroup.clearLayers();
 
     const hqs = Placement.getHQs();
-    const buildR = Placement.getBuildRadius();
-    const alienNodeR = Placement.getAlienNodeRadius();
-    const alienBiocacheR = Placement.getAlienBiocacheRadius();
     const resData = Layers.getResourceData();
     if (!resData) return;
 
@@ -29,7 +26,7 @@ const Expansion = (() => {
 
     // Compute ownership: which resources are within each faction's build radii
     // Humans (Sol/Cent) claim Balterium; Aliens claim Biotics
-    const ownership = computeOwnership(hqs, resources, buildR, alienNodeR, alienBiocacheR);
+    const ownership = computeOwnership(hqs, resources);
 
     // Update resource marker colors
     updateResourceColors(resources, ownership);
@@ -38,7 +35,7 @@ const Expansion = (() => {
     UI.updateBalance(resources, ownership);
   }
 
-  function computeOwnership(hqs, resources, buildR, alienNodeR, alienBiocacheR) {
+  function computeOwnership(hqs, resources) {
     const ownership = {};
 
     // Precompute tiers for each faction
@@ -79,7 +76,7 @@ const Expansion = (() => {
               Math.pow(res.x - hq.latlng.lng, 2) +
               Math.pow(res.z - hq.latlng.lat, 2)
             );
-            if (dist <= buildR) {
+            if (dist <= Placement.getBuildRadius(faction)) {
               const tier = tiers[i];
               if (faction === 'Sol') solTier = Math.min(solTier, tier);
               else centTier = Math.min(centTier, tier);
@@ -95,7 +92,7 @@ const Expansion = (() => {
           const tiers = tierCache.Alien;
           for (let i = 0; i < factionHqs.length; i++) {
             const hq = factionHqs[i];
-            const r = hq.isBiocache ? alienBiocacheR : alienNodeR;
+            const r = Placement.getAlienEffectiveRadius(hq);
             const dist = Math.sqrt(
               Math.pow(res.x - hq.latlng.lng, 2) +
               Math.pow(res.z - hq.latlng.lat, 2)
@@ -143,9 +140,7 @@ const Expansion = (() => {
 
   function computeHQTiers(faction, factionHqs) {
     // BFS from spawn HQ to compute chain depth
-    const chainRange = faction === 'Alien'
-      ? Placement.getAlienChainRange()
-      : Placement.getChainRange();
+    const chainRange = Placement.getChainRange(faction);
     const tiers = new Array(factionHqs.length).fill(Infinity);
 
     // Find spawn HQ (isSpawn = true, or first one)

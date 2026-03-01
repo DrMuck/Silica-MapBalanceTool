@@ -41,11 +41,50 @@ const Placement = (() => {
   let chainLines = { Sol: [], Cent: [], Alien: [] };
 
   // Settings (updated by UI)
-  let buildRadius = 550;
-  let chainRange = 1300;
-  let alienNodeRadius = 150;
-  let alienBiocacheRadius = 150;
-  const ALIEN_CHAIN_RANGE = 400;
+  let solBuildRadius = 620;
+  let centBuildRadius = 600;
+  let solChainRange = 1520;
+  let centChainRange = 1500;
+  let alienNodeChainRange = 150;
+  let alienBiocacheChainRange = 150;
+
+  // Structure half-dimensions: { h: longest side / 2, w: shortest side / 2 }
+  // Effective radius = sqrt(R² - h²) - w
+  const HALF_DIMS = {
+    Sol:      { h: 111 / 2, w: 76 / 2 },   // Sol HQ 76×111
+    Cent:     { h: 75 / 2,  w: 47 / 2 },    // Cent HQ 47×75
+    nest:     { h: 50 / 2,  w: 50 / 2 },    // Alien Nest 50×50
+    node:     { h: 10 / 2,  w: 10 / 2 },    // Alien Node 10×10
+    biocache: { h: 8,       w: 8 },          // Biocache ~16×16
+  };
+
+  // Effective radius: sqrt(R² - h²) - w
+  // h = half-length (perpendicular to radial), w = half-width (along radial)
+  function effectiveRadius(R, dims) {
+    const sq = R * R - dims.h * dims.h;
+    return sq > 0 ? Math.sqrt(sq) - dims.w : 0;
+  }
+
+  // Get half-dimensions for a specific structure entry
+  function getHalfDims(hqEntry) {
+    if (hqEntry.faction !== 'Alien') return HALF_DIMS[hqEntry.faction];
+    if (hqEntry.isSpawn) return HALF_DIMS.nest;
+    if (hqEntry.isBiocache) return HALF_DIMS.biocache;
+    return HALF_DIMS.node;
+  }
+
+  // Get the base chain range for a specific structure
+  function getStructureChainRange(hqEntry) {
+    if (hqEntry.faction !== 'Alien') return getBaseChainRange(hqEntry.faction);
+    return hqEntry.isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
+  }
+
+  // Get the base chain range for a faction (used for chain lines/BFS)
+  function getBaseChainRange(faction) {
+    if (faction === 'Sol') return solChainRange;
+    if (faction === 'Cent') return centChainRange;
+    return alienNodeChainRange; // chain connectivity uses node range
+  }
 
   // Structure footprint definitions (from scan AboveGroundPoints, meters)
   //
@@ -167,14 +206,18 @@ const Placement = (() => {
   function findParentHQ(faction, latlng) {
     let bestParent = null;
     let bestDist = Infinity;
-    const range = faction === 'Alien' ? ALIEN_CHAIN_RANGE : chainRange;
 
     for (const hq of hqs[faction]) {
+      // Effective chain range = sqrt(R² - h²) where h = parent's half-length
+      const base = getStructureChainRange(hq);
+      const dims = getHalfDims(hq);
+      const effRange = effectiveRadius(base, dims);
+
       const worldDist = Math.sqrt(
         Math.pow(latlng.lat - hq.latlng.lat, 2) +
         Math.pow(latlng.lng - hq.latlng.lng, 2)
       );
-      if (worldDist <= range && worldDist < bestDist) {
+      if (worldDist <= effRange && worldDist < bestDist) {
         bestDist = worldDist;
         bestParent = hq;
       }
@@ -218,31 +261,72 @@ const Placement = (() => {
 
     // Build radius circle (polygon-based for correct CRS.Simple rendering)
     const buildColor = getFactionColor(faction);
-    const bR = faction === 'Alien' ? (isBiocache ? alienBiocacheRadius : alienNodeRadius) : buildRadius;
-    const cR = faction === 'Alien' ? ALIEN_CHAIN_RANGE : chainRange;
+    let bR, cR;
+    if (faction === 'Alien') {
+      // Aliens: effective radius = sqrt(R² - h²)
+      const structCR = isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
+      const dims = isBiocache ? HALF_DIMS.biocache
+        : (isSpawn ? HALF_DIMS.nest : HALF_DIMS.node);
+      bR = effectiveRadius(structCR, dims);
+      // Chain circle for nests/nodes (not biocaches)
+      if (!isBiocache) {
+        cR = effectiveRadius(structCR, dims);
+      } else {
+        cR = null;
+      }
+    } else {
+      bR = faction === 'Sol' ? solBuildRadius : centBuildRadius;
+      cR = null; // humans use 4 dedicated circles below
+    }
 
-    const buildCircle = createCircle(latlng, bR, {
-      color: buildColor,
-      fillColor: buildColor,
-      fillOpacity: 0.08,
-      weight: 2,
-      opacity: 0.6,
-    }).addTo(placementGroup);
+    // For humans: 4 circles. For aliens: 2 circles (build + chain).
+    let buildCircle, effBuildCircle = null, chainCircle = null, effChainCircle = null;
 
-    // Chain range circle (dashed) — skip for biocaches
-    let chainCircle = null;
-    if (!isBiocache) {
-      chainCircle = createCircle(latlng, cR, {
-        color: buildColor,
-        fillColor: 'transparent',
-        fillOpacity: 0,
-        weight: 2,
-        opacity: 0.6,
-        dashArray: '8,8',
+    if (faction === 'Alien') {
+      // Alien: solid build circle + dashed chain circle
+      buildCircle = createCircle(latlng, bR, {
+        color: buildColor, fillColor: buildColor, fillOpacity: 0.08,
+        weight: 2, opacity: 0.6,
+      }).addTo(placementGroup);
+      if (cR !== null) {
+        chainCircle = createCircle(latlng, cR, {
+          color: buildColor, fillColor: 'transparent', fillOpacity: 0,
+          weight: 2, opacity: 0.6, dashArray: '8,8',
+        }).addTo(placementGroup);
+      }
+    } else {
+      // Human: 4 circles
+      const dims = HALF_DIMS[faction];
+      const base = faction === 'Sol' ? solChainRange : centChainRange;
+      const fBR = faction === 'Sol' ? solBuildRadius : centBuildRadius;
+      const effColor = faction === 'Sol' ? '#9944ff' : '#ff66aa'; // purple / pink
+
+      // 1) Build radius — solid faction color, with fill
+      buildCircle = createCircle(latlng, fBR, {
+        color: buildColor, fillColor: buildColor, fillOpacity: 0.08,
+        weight: 2, opacity: 0.7,
+      }).addTo(placementGroup);
+
+      // 2) Effective build radius — dotted faction color, no fill
+      effBuildCircle = createCircle(latlng, effectiveRadius(fBR, dims), {
+        color: buildColor, fillColor: 'transparent', fillOpacity: 0,
+        weight: 2, opacity: 0.7, dashArray: '4,6',
+      }).addTo(placementGroup);
+
+      // 3) Chain range (expansion radius) — dashed faction color, no fill
+      chainCircle = createCircle(latlng, base, {
+        color: buildColor, fillColor: 'transparent', fillOpacity: 0,
+        weight: 2, opacity: 0.7, dashArray: '10,8',
+      }).addTo(placementGroup);
+
+      // 4) Effective chain range (expansion effective) — dotted purple/pink, no fill
+      effChainCircle = createCircle(latlng, effectiveRadius(base, dims), {
+        color: effColor, fillColor: 'transparent', fillOpacity: 0,
+        weight: 2, opacity: 0.7, dashArray: '4,6',
       }).addTo(placementGroup);
     }
 
-    const hqEntry = { marker, buildCircle, chainCircle, latlng, isSpawn, faction, isBiocache };
+    const hqEntry = { marker, buildCircle, effBuildCircle, chainCircle, effChainCircle, latlng, isSpawn, faction, isBiocache };
     hqs[faction].push(hqEntry);
 
     // Label
@@ -267,10 +351,22 @@ const Placement = (() => {
       const newLatLng = snapToGrid(e.latlng);
       marker.setLatLng(newLatLng);
       hqEntry.latlng = newLatLng;
-      const curBR = faction === 'Alien' ? (hqEntry.isBiocache ? alienBiocacheRadius : alienNodeRadius) : buildRadius;
-      const curCR = faction === 'Alien' ? ALIEN_CHAIN_RANGE : chainRange;
-      updateCirclePosition(buildCircle, newLatLng, curBR);
-      if (chainCircle) updateCirclePosition(chainCircle, newLatLng, curCR);
+      if (faction === 'Alien') {
+        const dims = getHalfDims(hqEntry);
+        const R = getStructureChainRange(hqEntry);
+        updateCirclePosition(hqEntry.buildCircle, newLatLng, effectiveRadius(R, dims));
+        if (hqEntry.chainCircle) {
+          updateCirclePosition(hqEntry.chainCircle, newLatLng, effectiveRadius(R, dims));
+        }
+      } else {
+        const dims = HALF_DIMS[faction];
+        const base = faction === 'Sol' ? solChainRange : centChainRange;
+        const fBR = faction === 'Sol' ? solBuildRadius : centBuildRadius;
+        updateCirclePosition(hqEntry.buildCircle, newLatLng, fBR);
+        updateCirclePosition(hqEntry.effBuildCircle, newLatLng, effectiveRadius(fBR, dims));
+        updateCirclePosition(hqEntry.chainCircle, newLatLng, base);
+        updateCirclePosition(hqEntry.effChainCircle, newLatLng, effectiveRadius(base, dims));
+      }
       updateChainLines();
       Expansion.update();
     });
@@ -292,7 +388,9 @@ const Placement = (() => {
   function removeHQ(faction, hqEntry) {
     placementGroup.removeLayer(hqEntry.marker);
     placementGroup.removeLayer(hqEntry.buildCircle);
+    if (hqEntry.effBuildCircle) placementGroup.removeLayer(hqEntry.effBuildCircle);
     if (hqEntry.chainCircle) placementGroup.removeLayer(hqEntry.chainCircle);
+    if (hqEntry.effChainCircle) placementGroup.removeLayer(hqEntry.effChainCircle);
     hqs[faction] = hqs[faction].filter(h => h !== hqEntry);
     updateChainLines();
     Expansion.update();
@@ -306,7 +404,7 @@ const Placement = (() => {
 
       // Draw lines between HQs that are within chain range (skip biocaches)
       const color = getFactionColor(faction);
-      const range = faction === 'Alien' ? ALIEN_CHAIN_RANGE : chainRange;
+      const range = getBaseChainRange(faction);
       const chainable = hqs[faction].filter(h => !h.isBiocache);
       for (let i = 0; i < chainable.length; i++) {
         for (let j = i + 1; j < chainable.length; j++) {
@@ -524,7 +622,9 @@ const Placement = (() => {
       hqs[faction].forEach(hq => {
         placementGroup.removeLayer(hq.marker);
         placementGroup.removeLayer(hq.buildCircle);
+        if (hq.effBuildCircle) placementGroup.removeLayer(hq.effBuildCircle);
         if (hq.chainCircle) placementGroup.removeLayer(hq.chainCircle);
+        if (hq.effChainCircle) placementGroup.removeLayer(hq.effChainCircle);
       });
       hqs[faction] = [];
       chainLines[faction].forEach(l => placementGroup.removeLayer(l));
@@ -541,36 +641,59 @@ const Placement = (() => {
     Expansion.update();
   }
 
-  function setBuildRadius(r) {
-    buildRadius = r;
-    for (const faction of ['Sol', 'Cent']) {
-      hqs[faction].forEach(hq => updateCirclePosition(hq.buildCircle, hq.latlng, r));
-    }
-    Expansion.update();
-  }
-
-  function setChainRange(r) {
-    chainRange = r;
-    for (const faction of ['Sol', 'Cent']) {
-      hqs[faction].forEach(hq => {
-        if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, r);
-      });
-    }
-    updateChainLines();
-  }
-
-  function setAlienNodeRadius(r) {
-    alienNodeRadius = r;
-    hqs.Alien.forEach(hq => {
-      if (!hq.isBiocache) updateCirclePosition(hq.buildCircle, hq.latlng, r);
+  function setSolBuildRadius(r) {
+    solBuildRadius = r;
+    hqs.Sol.forEach(hq => {
+      updateCirclePosition(hq.buildCircle, hq.latlng, r);
+      if (hq.effBuildCircle) updateCirclePosition(hq.effBuildCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.Sol));
     });
     Expansion.update();
   }
 
-  function setAlienBiocacheRadius(r) {
-    alienBiocacheRadius = r;
+  function setCentBuildRadius(r) {
+    centBuildRadius = r;
+    hqs.Cent.forEach(hq => {
+      updateCirclePosition(hq.buildCircle, hq.latlng, r);
+      if (hq.effBuildCircle) updateCirclePosition(hq.effBuildCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.Cent));
+    });
+    Expansion.update();
+  }
+
+  function setSolChainRange(r) {
+    solChainRange = r;
+    hqs.Sol.forEach(hq => {
+      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, r);
+      if (hq.effChainCircle) updateCirclePosition(hq.effChainCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.Sol));
+    });
+    updateChainLines();
+  }
+
+  function setCentChainRange(r) {
+    centChainRange = r;
+    hqs.Cent.forEach(hq => {
+      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, r);
+      if (hq.effChainCircle) updateCirclePosition(hq.effChainCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.Cent));
+    });
+    updateChainLines();
+  }
+
+  function setAlienNodeChainRange(r) {
+    alienNodeChainRange = r;
     hqs.Alien.forEach(hq => {
-      if (hq.isBiocache) updateCirclePosition(hq.buildCircle, hq.latlng, r);
+      if (hq.isBiocache) return;
+      const dims = getHalfDims(hq);
+      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
+      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
+    });
+    updateChainLines();
+    Expansion.update();
+  }
+
+  function setAlienBiocacheChainRange(r) {
+    alienBiocacheChainRange = r;
+    hqs.Alien.forEach(hq => {
+      if (!hq.isBiocache) return;
+      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.biocache));
     });
     Expansion.update();
   }
@@ -588,8 +711,11 @@ const Placement = (() => {
   }
 
   function getHQs() { return hqs; }
-  function getBuildRadius() { return buildRadius; }
-  function getChainRange() { return chainRange; }
+  function getBuildRadius(faction) {
+    if (faction === 'Sol') return solBuildRadius;
+    if (faction === 'Cent') return centBuildRadius;
+    return solBuildRadius; // fallback
+  }
 
   function exportLayout() {
     const layout = {};
@@ -627,7 +753,7 @@ const Placement = (() => {
       layout.resources.patch_overrides = patchOverrides;
     }
 
-    layout.settings = { buildRadius, chainRange, alienNodeRadius, alienBiocacheRadius, alienChainRange: ALIEN_CHAIN_RANGE };
+    layout.settings = { solBuildRadius, centBuildRadius, solChainRange, centChainRange, alienNodeChainRange, alienBiocacheChainRange };
 
     // Game modes
     layout.game_modes = {
@@ -643,16 +769,16 @@ const Placement = (() => {
     init,
     setPlacementMode,
     clearAll,
-    setBuildRadius,
-    setChainRange,
-    setAlienNodeRadius,
-    setAlienBiocacheRadius,
+    setSolBuildRadius,
+    setCentBuildRadius,
+    setSolChainRange,
+    setCentChainRange,
+    setAlienNodeChainRange,
+    setAlienBiocacheChainRange,
     getHQs,
     getBuildRadius,
-    getChainRange,
-    getAlienNodeRadius: () => alienNodeRadius,
-    getAlienBiocacheRadius: () => alienBiocacheRadius,
-    getAlienChainRange: () => ALIEN_CHAIN_RANGE,
+    getChainRange: (faction) => getBaseChainRange(faction),
+    getAlienEffectiveRadius: (hqEntry) => effectiveRadius(getStructureChainRange(hqEntry), getHalfDims(hqEntry)),
     exportLayout,
     addHQAt,
     placeFootprintAt,
