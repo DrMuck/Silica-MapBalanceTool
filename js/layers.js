@@ -266,32 +266,29 @@ const Layers = (() => {
       `</div>` +
       excludedTag;
 
-    // Wire up events after popup opens
+    // Wire up events directly on the DOM element before binding
+    const input = popupContent.querySelector('.patch-amount-input');
+    const resetBtn = popupContent.querySelector('.patch-reset-btn');
+    if (input) {
+      input.addEventListener('input', () => {
+        const val = parseInt(input.value);
+        if (!isNaN(val) && val >= 0) {
+          setPatchAmount(res.idx, val);
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        clearPatchOverride(res.idx);
+        updatePopup(marker, res);
+        marker.openPopup();
+      });
+    }
+
     marker.bindPopup(popupContent);
-    marker.off('popupopen.patchedit');
-    marker.on('popupopen.patchedit', () => {
-      const input = popupContent.querySelector('.patch-amount-input');
-      const resetBtn = popupContent.querySelector('.patch-reset-btn');
-      if (input) {
-        input.addEventListener('change', () => {
-          const val = parseInt(input.value);
-          if (!isNaN(val) && val >= 0) {
-            setPatchAmount(res.idx, val);
-            updatePopup(marker, res);
-          }
-        });
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') input.blur();
-        });
-      }
-      if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-          clearPatchOverride(res.idx);
-          updatePopup(marker, res);
-          marker.openPopup();
-        });
-      }
-    });
   }
 
   function toggleExcluded(idx) {
@@ -357,11 +354,13 @@ const Layers = (() => {
       });
       marker.setIcon(labelIcon);
 
-      // Also update popup on the circle marker
+      // Also update popup on the circle marker (skip if popup is open to avoid closing it mid-edit)
       const allCircles = [];
       if (balteriumLayer) balteriumLayer.eachLayer(m => { if (m._resData && m._resData.idx === res.idx) allCircles.push(m); });
       if (bioticsLayer) bioticsLayer.eachLayer(m => { if (m._resData && m._resData.idx === res.idx) allCircles.push(m); });
-      allCircles.forEach(cm => updatePopup(cm, res));
+      allCircles.forEach(cm => {
+        if (!cm.isPopupOpen()) updatePopup(cm, res);
+      });
     });
     updateResourceTotals();
   }
