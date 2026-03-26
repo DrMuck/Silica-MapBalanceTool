@@ -77,7 +77,6 @@ const Placement = (() => {
   // Get the base chain range for a specific structure
   function getStructureChainRange(hqEntry) {
     if (hqEntry.faction !== 'Alien') return getBaseChainRange(hqEntry.faction);
-    if (hqEntry.isSpawn) return alienBuildRadius; // nest uses its own build radius
     return hqEntry.isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
   }
 
@@ -175,11 +174,14 @@ const Placement = (() => {
       }
     }
 
-    // Expansion/biocache must be within chain range of existing HQ/nest
+    // Expansion/biocache must be within build radius of the structure being placed
     if (isExpansion) {
-      const parent = findParentHQ(faction, snapped);
+      const placingRadius = faction === 'Alien'
+        ? (isBiocache ? alienBiocacheChainRange : alienNodeChainRange)
+        : getBaseChainRange(faction);
+      const parent = findParentHQ(faction, snapped, placingRadius);
       if (!parent) {
-        showPlacementError(snapped, 'Out of chain range');
+        showPlacementError(snapped, 'Out of build radius');
         return;
       }
     }
@@ -205,15 +207,14 @@ const Placement = (() => {
     setTimeout(() => placementGroup.removeLayer(marker), 1500);
   }
 
-  function findParentHQ(faction, latlng) {
+  function findParentHQ(faction, latlng, placingRadius) {
     let bestParent = null;
     let bestDist = Infinity;
 
     for (const hq of hqs[faction]) {
-      // Effective chain range = sqrt(R² - h²) where h = parent's half-length
-      const base = getStructureChainRange(hq);
+      // Use the build radius of what's being placed, not the parent
       const dims = getHalfDims(hq);
-      const effRange = effectiveRadius(base, dims);
+      const effRange = effectiveRadius(placingRadius, dims);
 
       const worldDist = Math.sqrt(
         Math.pow(latlng.lat - hq.latlng.lat, 2) +
@@ -268,9 +269,9 @@ const Placement = (() => {
       const dims = isBiocache ? HALF_DIMS.biocache
         : (isSpawn ? HALF_DIMS.nest : HALF_DIMS.node);
       if (isSpawn) {
-        // Nest: build radius + chain circle both use nest build radius
+        // Nest: single dashed circle for nest build radius
         bR = effectiveRadius(alienBuildRadius, dims);
-        cR = effectiveRadius(alienBuildRadius, dims);
+        cR = null;
       } else if (isBiocache) {
         // Biocache: only its own build radius, no chain circle
         bR = effectiveRadius(alienBiocacheChainRange, dims);
@@ -289,8 +290,11 @@ const Placement = (() => {
     let buildCircle, effBuildCircle = null, chainCircle = null, effChainCircle = null;
 
     if (faction === 'Alien') {
-      // Alien: solid build circle + dashed chain circle
-      buildCircle = createCircle(latlng, bR, {
+      // Alien: nest gets dashed unfilled circle, nodes/biocaches get solid filled
+      buildCircle = createCircle(latlng, bR, isSpawn ? {
+        color: buildColor, fillColor: 'transparent', fillOpacity: 0,
+        weight: 2, opacity: 0.6, dashArray: '8,8',
+      } : {
         color: buildColor, fillColor: buildColor, fillOpacity: 0.08,
         weight: 2, opacity: 0.6,
       }).addTo(placementGroup);
