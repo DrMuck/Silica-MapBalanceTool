@@ -265,15 +265,19 @@ const Placement = (() => {
     const buildColor = getFactionColor(faction);
     let bR, cR;
     if (faction === 'Alien') {
-      // Aliens: build radius is independent, chain range is separate
       const dims = isBiocache ? HALF_DIMS.biocache
         : (isSpawn ? HALF_DIMS.nest : HALF_DIMS.node);
-      bR = effectiveRadius(alienBuildRadius, dims);
-      // Chain circle for nests/nodes (not biocaches)
-      if (!isBiocache) {
-        const structCR = isSpawn ? alienBuildRadius : alienNodeChainRange;
-        cR = effectiveRadius(structCR, dims);
+      if (isSpawn) {
+        // Nest: build radius + chain circle both use nest build radius
+        bR = effectiveRadius(alienBuildRadius, dims);
+        cR = effectiveRadius(alienBuildRadius, dims);
+      } else if (isBiocache) {
+        // Biocache: only its own build radius, no chain circle
+        bR = effectiveRadius(alienBiocacheChainRange, dims);
+        cR = null;
       } else {
+        // Node: only its own build radius, no chain circle
+        bR = effectiveRadius(alienNodeChainRange, dims);
         cR = null;
       }
     } else {
@@ -682,12 +686,10 @@ const Placement = (() => {
   function setAlienBuildRadius(r) {
     alienBuildRadius = r;
     hqs.Alien.forEach(hq => {
+      if (!hq.isSpawn) return;
       const dims = getHalfDims(hq);
       updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
-      // Nest chain circle is also tied to build radius
-      if (hq.isSpawn && hq.chainCircle) {
-        updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
-      }
+      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
     });
   }
 
@@ -696,7 +698,7 @@ const Placement = (() => {
     hqs.Alien.forEach(hq => {
       if (hq.isBiocache || hq.isSpawn) return;
       const dims = getHalfDims(hq);
-      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
+      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
     });
     updateChainLines();
     Expansion.update();
