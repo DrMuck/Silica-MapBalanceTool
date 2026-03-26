@@ -77,6 +77,7 @@ const Placement = (() => {
   // Get the base chain range for a specific structure
   function getStructureChainRange(hqEntry) {
     if (hqEntry.faction !== 'Alien') return getBaseChainRange(hqEntry.faction);
+    if (hqEntry.isSpawn) return alienBuildRadius; // nest uses its own build radius
     return hqEntry.isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
   }
 
