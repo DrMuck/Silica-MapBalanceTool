@@ -45,6 +45,7 @@ const Placement = (() => {
   let centBuildRadius = 600;
   let solChainRange = 1520;
   let centChainRange = 1500;
+  let alienBuildRadius = 150;
   let alienNodeChainRange = 150;
   let alienBiocacheChainRange = 150;
 
@@ -263,13 +264,13 @@ const Placement = (() => {
     const buildColor = getFactionColor(faction);
     let bR, cR;
     if (faction === 'Alien') {
-      // Aliens: effective radius = sqrt(R² - h²)
-      const structCR = isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
+      // Aliens: build radius is independent, chain range is separate
       const dims = isBiocache ? HALF_DIMS.biocache
         : (isSpawn ? HALF_DIMS.nest : HALF_DIMS.node);
-      bR = effectiveRadius(structCR, dims);
+      bR = effectiveRadius(alienBuildRadius, dims);
       // Chain circle for nests/nodes (not biocaches)
       if (!isBiocache) {
+        const structCR = alienNodeChainRange;
         cR = effectiveRadius(structCR, dims);
       } else {
         cR = null;
@@ -677,12 +678,19 @@ const Placement = (() => {
     updateChainLines();
   }
 
+  function setAlienBuildRadius(r) {
+    alienBuildRadius = r;
+    hqs.Alien.forEach(hq => {
+      const dims = getHalfDims(hq);
+      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
+    });
+  }
+
   function setAlienNodeChainRange(r) {
     alienNodeChainRange = r;
     hqs.Alien.forEach(hq => {
       if (hq.isBiocache) return;
       const dims = getHalfDims(hq);
-      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
       if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
     });
     updateChainLines();
@@ -714,6 +722,7 @@ const Placement = (() => {
   function getBuildRadius(faction) {
     if (faction === 'Sol') return solBuildRadius;
     if (faction === 'Cent') return centBuildRadius;
+    if (faction === 'Alien') return alienBuildRadius;
     return solBuildRadius; // fallback
   }
 
@@ -753,7 +762,7 @@ const Placement = (() => {
       layout.resources.patch_overrides = patchOverrides;
     }
 
-    layout.settings = { solBuildRadius, centBuildRadius, solChainRange, centChainRange, alienNodeChainRange, alienBiocacheChainRange };
+    layout.settings = { solBuildRadius, centBuildRadius, solChainRange, centChainRange, alienBuildRadius, alienNodeChainRange, alienBiocacheChainRange };
 
     // Game modes
     layout.game_modes = {
@@ -773,6 +782,7 @@ const Placement = (() => {
     setCentBuildRadius,
     setSolChainRange,
     setCentChainRange,
+    setAlienBuildRadius,
     setAlienNodeChainRange,
     setAlienBiocacheChainRange,
     getHQs,

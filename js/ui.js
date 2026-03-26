@@ -98,7 +98,16 @@ const UI = (() => {
       Placement.setCentChainRange(v);
     });
 
-    // Alien chain range sliders (build radius = chain range for aliens)
+    // Alien build radius slider (independent from node range)
+    const alienBuildSlider = document.getElementById('setting-alien-build-radius');
+    const alienBuildVal = document.getElementById('val-alien-build-radius');
+    alienBuildSlider.addEventListener('input', () => {
+      const v = parseInt(alienBuildSlider.value);
+      alienBuildVal.textContent = `${v}m`;
+      Placement.setAlienBuildRadius(v);
+    });
+
+    // Alien chain range sliders
     const alienNodeSlider = document.getElementById('setting-alien-node-range');
     const alienNodeVal = document.getElementById('val-alien-node-range');
     alienNodeSlider.addEventListener('input', () => {
@@ -339,6 +348,13 @@ const UI = (() => {
         document.getElementById('setting-cent-chain-range').value = s.chainRange;
         document.getElementById('val-cent-chain-range').textContent = `${s.chainRange}m`;
         Placement.setCentChainRange(s.chainRange);
+      }
+      // Alien build radius (fallback to node chain range for old configs)
+      const alienBR = s.alienBuildRadius ?? s.alienNodeChainRange ?? s.alienChainRange;
+      if (alienBR !== undefined) {
+        document.getElementById('setting-alien-build-radius').value = alienBR;
+        document.getElementById('val-alien-build-radius').textContent = `${alienBR}m`;
+        Placement.setAlienBuildRadius(alienBR);
       }
       // Support old single alienChainRange and new per-type ranges
       const alienNodeR = s.alienNodeChainRange ?? s.alienChainRange;
