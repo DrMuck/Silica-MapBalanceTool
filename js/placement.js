@@ -270,7 +270,7 @@ const Placement = (() => {
       bR = effectiveRadius(alienBuildRadius, dims);
       // Chain circle for nests/nodes (not biocaches)
       if (!isBiocache) {
-        const structCR = alienNodeChainRange;
+        const structCR = isSpawn ? alienBuildRadius : alienNodeChainRange;
         cR = effectiveRadius(structCR, dims);
       } else {
         cR = null;
@@ -683,13 +683,17 @@ const Placement = (() => {
     hqs.Alien.forEach(hq => {
       const dims = getHalfDims(hq);
       updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
+      // Nest chain circle is also tied to build radius
+      if (hq.isSpawn && hq.chainCircle) {
+        updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
+      }
     });
   }
 
   function setAlienNodeChainRange(r) {
     alienNodeChainRange = r;
     hqs.Alien.forEach(hq => {
-      if (hq.isBiocache) return;
+      if (hq.isBiocache || hq.isSpawn) return;
       const dims = getHalfDims(hq);
       if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
     });
