@@ -69,6 +69,9 @@
         <button class="btn btn-cent" id="btn-expand-cent">Add Cent Expansion</button>
         <button class="btn btn-alien" id="btn-expand-alien">Add Alien Node</button>
         <button class="btn btn-alien" id="btn-place-biocache">Add Biocache</button>
+        <button class="btn btn-wildlife" id="btn-place-wildlife">Place Wildlife Nest</button>
+        <button class="btn btn-wildlife" id="btn-expand-wildlife">Add Wildlife Node</button>
+        <button class="btn btn-wildlife" id="btn-place-wildlife-biocache">Add Wildlife Biocache</button>
         <button class="btn btn-clear" id="btn-clear">Clear All</button>
         <div class="layer-toggle" style="margin-top:6px;">
           <input type="checkbox" id="setting-restrict-hq" checked>
@@ -142,6 +145,7 @@
           <input type="range" id="setting-alien-bc-range" min="50" max="3000" value="150" step="10">
           <span class="setting-value" id="val-alien-bc-range">150m</span>
         </div>
+        <p style="font-size:11px;color:#c8963c;margin-top:6px;">Wildlife uses same radii as Alien</p>
       </div>
 
       <!-- Balance Panel -->
@@ -166,6 +170,10 @@
         <div class="layer-toggle">
           <input type="checkbox" id="mode-hvhva" checked>
           <label for="mode-hvhva">HvHvA</label>
+        </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="mode-4way">
+          <label for="mode-4way">4-Way</label>
         </div>
       </div>
 

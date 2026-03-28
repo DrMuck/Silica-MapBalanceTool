@@ -32,13 +32,14 @@ const Placement = (() => {
   }
 
   // State
-  let placementMode = null; // 'sol-hq', 'cent-hq', 'alien-nest', 'alien-biocache', 'sol-expand', 'cent-expand', 'alien-expand'
+  let placementMode = null; // 'sol-hq', 'cent-hq', 'alien-nest', 'alien-biocache', 'sol-expand', 'cent-expand', 'alien-expand', 'wildlife-nest', 'wildlife-biocache', 'wildlife-expand'
   let hqs = {
     Sol: [],  // [{marker, buildCircle, chainCircle, latlng, isSpawn}]
     Cent: [],
     Alien: [],
+    Wildlife: [],
   };
-  let chainLines = { Sol: [], Cent: [], Alien: [] };
+  let chainLines = { Sol: [], Cent: [], Alien: [], Wildlife: [] };
 
   // Settings (updated by UI)
   let solBuildRadius = 620;
@@ -48,6 +49,9 @@ const Placement = (() => {
   let alienBuildRadius = 150;
   let alienNodeChainRange = 150;
   let alienBiocacheChainRange = 150;
+  let wildlifeBuildRadius = 150;
+  let wildlifeNodeChainRange = 150;
+  let wildlifeBiocacheChainRange = 150;
 
   // Structure half-dimensions: { h: longest side / 2, w: shortest side / 2 }
   // Effective radius = sqrt(R² - h²) - w
@@ -68,23 +72,29 @@ const Placement = (() => {
 
   // Get half-dimensions for a specific structure entry
   function getHalfDims(hqEntry) {
-    if (hqEntry.faction !== 'Alien') return HALF_DIMS[hqEntry.faction];
+    if (!isAlienType(hqEntry.faction)) return HALF_DIMS[hqEntry.faction];
     if (hqEntry.isSpawn) return HALF_DIMS.nest;
     if (hqEntry.isBiocache) return HALF_DIMS.biocache;
     return HALF_DIMS.node;
   }
 
-  // Get the base chain range for a specific structure
+  // Get the effective radius parameter for a specific structure
+  // Wildlife uses same values as Alien
   function getStructureChainRange(hqEntry) {
-    if (hqEntry.faction !== 'Alien') return getBaseChainRange(hqEntry.faction);
-    return hqEntry.isBiocache ? alienBiocacheChainRange : alienNodeChainRange;
+    if (isAlienType(hqEntry.faction)) {
+      if (hqEntry.isSpawn) return alienBuildRadius;      // nest uses build radius
+      if (hqEntry.isBiocache) return alienBiocacheChainRange;
+      return alienNodeChainRange;
+    }
+    return getBaseChainRange(hqEntry.faction);
   }
 
   // Get the base chain range for a faction (used for chain lines/BFS)
   function getBaseChainRange(faction) {
     if (faction === 'Sol') return solChainRange;
     if (faction === 'Cent') return centChainRange;
-    return alienNodeChainRange; // chain connectivity uses node range
+    if (faction === 'Wildlife') return wildlifeNodeChainRange;
+    return alienNodeChainRange;
   }
 
   // Structure footprint definitions (from scan AboveGroundPoints, meters)
@@ -160,9 +170,10 @@ const Placement = (() => {
     }
 
     const faction = placementMode.startsWith('sol') ? 'Sol'
-      : placementMode.startsWith('cent') ? 'Cent' : 'Alien';
-    const isExpansion = placementMode.includes('expand') || placementMode === 'alien-biocache';
-    const isBiocache = placementMode === 'alien-biocache';
+      : placementMode.startsWith('cent') ? 'Cent'
+      : placementMode.startsWith('wildlife') ? 'Wildlife' : 'Alien';
+    const isExpansion = placementMode.includes('expand') || placementMode === 'alien-biocache' || placementMode === 'wildlife-biocache';
+    const isBiocache = placementMode === 'alien-biocache' || placementMode === 'wildlife-biocache';
     const mapName = App.getCurrentMap();
 
     // Validate placement against HQ mask (skip for aliens — they place anywhere)
@@ -228,15 +239,21 @@ const Placement = (() => {
     return bestParent;
   }
 
-  // Faction colors: Sol=blue, Cent=red, Alien=green
+  // Is this an alien-type faction (Alien or Wildlife)?
+  function isAlienType(faction) {
+    return faction === 'Alien' || faction === 'Wildlife';
+  }
+
+  // Faction colors: Sol=blue, Cent=red, Alien=green, Wildlife=brown
   function getFactionColor(faction) {
     if (faction === 'Sol') return '#328cff';
     if (faction === 'Cent') return '#eb4646';
+    if (faction === 'Wildlife') return '#c8963c';
     return '#50c832';
   }
 
   function addHQ(faction, latlng, isSpawn, map, isBiocache) {
-    const fKey = faction === 'Sol' ? 'sol' : faction === 'Cent' ? 'cent' : 'alien';
+    const fKey = faction === 'Sol' ? 'sol' : faction === 'Cent' ? 'cent' : faction === 'Wildlife' ? 'wildlife' : 'alien';
 
     let markerClass;
     let iconSize;
@@ -265,19 +282,16 @@ const Placement = (() => {
     // Build radius circle (polygon-based for correct CRS.Simple rendering)
     const buildColor = getFactionColor(faction);
     let bR, cR;
-    if (faction === 'Alien') {
+    if (isAlienType(faction)) {
       const dims = isBiocache ? HALF_DIMS.biocache
         : (isSpawn ? HALF_DIMS.nest : HALF_DIMS.node);
       if (isSpawn) {
-        // Nest: single dashed circle for nest build radius
         bR = effectiveRadius(alienBuildRadius, dims);
         cR = null;
       } else if (isBiocache) {
-        // Biocache: only its own build radius, no chain circle
         bR = effectiveRadius(alienBiocacheChainRange, dims);
         cR = null;
       } else {
-        // Node: only its own build radius, no chain circle
         bR = effectiveRadius(alienNodeChainRange, dims);
         cR = null;
       }
@@ -289,8 +303,8 @@ const Placement = (() => {
     // For humans: 4 circles. For aliens: 2 circles (build + chain).
     let buildCircle, effBuildCircle = null, chainCircle = null, effChainCircle = null;
 
-    if (faction === 'Alien') {
-      // Alien: nest gets dashed unfilled circle, nodes/biocaches get solid filled
+    if (isAlienType(faction)) {
+      // Alien/Wildlife: nest gets dashed unfilled circle, nodes/biocaches get solid filled
       buildCircle = createCircle(latlng, bR, isSpawn ? {
         color: buildColor, fillColor: 'transparent', fillOpacity: 0,
         weight: 2, opacity: 0.6, dashArray: '8,8',
@@ -345,9 +359,9 @@ const Placement = (() => {
       const bioIdx = hqs[faction].filter(h => h.isBiocache).length;
       label = `BC${bioIdx}`;
     } else if (isSpawn) {
-      label = faction === 'Alien' ? 'Nest' : 'HQ';
+      label = isAlienType(faction) ? (faction === 'Wildlife' ? 'WNest' : 'Nest') : 'HQ';
     } else {
-      label = faction === 'Alien' ? `N${hqs[faction].length - 1}` : `E${hqs[faction].length - 1}`;
+      label = isAlienType(faction) ? `N${hqs[faction].length - 1}` : `E${hqs[faction].length - 1}`;
     }
     marker.bindTooltip(label, {
       permanent: true,
@@ -361,7 +375,7 @@ const Placement = (() => {
       const newLatLng = snapToGrid(e.latlng);
       marker.setLatLng(newLatLng);
       hqEntry.latlng = newLatLng;
-      if (faction === 'Alien') {
+      if (isAlienType(faction)) {
         const dims = getHalfDims(hqEntry);
         const R = getStructureChainRange(hqEntry);
         updateCirclePosition(hqEntry.buildCircle, newLatLng, effectiveRadius(R, dims));
@@ -408,7 +422,7 @@ const Placement = (() => {
 
   function updateChainLines() {
     // Clear old lines
-    for (const faction of ['Sol', 'Cent', 'Alien']) {
+    for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
       chainLines[faction].forEach(l => placementGroup.removeLayer(l));
       chainLines[faction] = [];
 
@@ -449,6 +463,9 @@ const Placement = (() => {
         'sol-expand': 'btn-expand-sol',
         'cent-expand': 'btn-expand-cent',
         'alien-expand': 'btn-expand-alien',
+        'wildlife-nest': 'btn-place-wildlife',
+        'wildlife-biocache': 'btn-place-wildlife-biocache',
+        'wildlife-expand': 'btn-expand-wildlife',
         'fp-sol-hq': 'btn-fp-sol-hq',
         'fp-cent-hq': 'btn-fp-cent-hq',
         'fp-sol-ref': 'btn-fp-sol-ref',
@@ -628,7 +645,7 @@ const Placement = (() => {
   }
 
   function clearAll() {
-    for (const faction of ['Sol', 'Cent', 'Alien']) {
+    for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
       hqs[faction].forEach(hq => {
         placementGroup.removeLayer(hq.marker);
         placementGroup.removeLayer(hq.buildCircle);
@@ -689,33 +706,41 @@ const Placement = (() => {
 
   function setAlienBuildRadius(r) {
     alienBuildRadius = r;
-    hqs.Alien.forEach(hq => {
-      if (!hq.isSpawn) return;
-      const dims = getHalfDims(hq);
-      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
-      if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
-    });
+    for (const f of ['Alien', 'Wildlife']) {
+      hqs[f].forEach(hq => {
+        if (!hq.isSpawn) return;
+        const dims = getHalfDims(hq);
+        updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
+        if (hq.chainCircle) updateCirclePosition(hq.chainCircle, hq.latlng, effectiveRadius(r, dims));
+      });
+    }
   }
 
   function setAlienNodeChainRange(r) {
     alienNodeChainRange = r;
-    hqs.Alien.forEach(hq => {
-      if (hq.isBiocache || hq.isSpawn) return;
-      const dims = getHalfDims(hq);
-      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
-    });
+    for (const f of ['Alien', 'Wildlife']) {
+      hqs[f].forEach(hq => {
+        if (hq.isBiocache || hq.isSpawn) return;
+        const dims = getHalfDims(hq);
+        updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, dims));
+      });
+    }
     updateChainLines();
     Expansion.update();
   }
 
   function setAlienBiocacheChainRange(r) {
     alienBiocacheChainRange = r;
-    hqs.Alien.forEach(hq => {
-      if (!hq.isBiocache) return;
-      updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.biocache));
-    });
+    for (const f of ['Alien', 'Wildlife']) {
+      hqs[f].forEach(hq => {
+        if (!hq.isBiocache) return;
+        updateCirclePosition(hq.buildCircle, hq.latlng, effectiveRadius(r, HALF_DIMS.biocache));
+      });
+    }
     Expansion.update();
   }
+
+  // Wildlife uses same radii as Alien — update Wildlife circles when Alien settings change
 
   function addHQAt(faction, x, z, isSpawn, isBiocache) {
     const latlng = L.latLng(z, x); // lat=Z, lng=X
@@ -743,7 +768,7 @@ const Placement = (() => {
 
     // Spawns
     layout.spawns = {};
-    for (const faction of ['Sol', 'Cent', 'Alien']) {
+    for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
       layout.spawns[faction] = hqs[faction].map(hq => ({
         x: hq.latlng.lng,
         z: hq.latlng.lat,
@@ -773,13 +798,20 @@ const Placement = (() => {
       layout.resources.patch_overrides = patchOverrides;
     }
 
-    layout.settings = { solBuildRadius, centBuildRadius, solChainRange, centChainRange, alienBuildRadius, alienNodeChainRange, alienBiocacheChainRange };
+    layout.settings = {
+      solBuildRadius, centBuildRadius, solChainRange, centChainRange,
+      alienBuildRadius, alienNodeChainRange, alienBiocacheChainRange,
+      wildlifeBuildRadius: alienBuildRadius,
+      wildlifeNodeChainRange: alienNodeChainRange,
+      wildlifeBiocacheChainRange: alienBiocacheChainRange,
+    };
 
     // Game modes
     layout.game_modes = {
       hvh: document.getElementById('mode-hvh').checked,
       hva: document.getElementById('mode-hva').checked,
       hvhva: document.getElementById('mode-hvhva').checked,
+      '4way': document.getElementById('mode-4way').checked,
     };
 
     return layout;

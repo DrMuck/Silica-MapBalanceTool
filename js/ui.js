@@ -26,6 +26,15 @@ const UI = (() => {
     document.getElementById('btn-place-biocache').addEventListener('click', () => {
       Placement.setPlacementMode('alien-biocache');
     });
+    document.getElementById('btn-place-wildlife').addEventListener('click', () => {
+      Placement.setPlacementMode('wildlife-nest');
+    });
+    document.getElementById('btn-expand-wildlife').addEventListener('click', () => {
+      Placement.setPlacementMode('wildlife-expand');
+    });
+    document.getElementById('btn-place-wildlife-biocache').addEventListener('click', () => {
+      Placement.setPlacementMode('wildlife-biocache');
+    });
     document.getElementById('btn-clear').addEventListener('click', () => {
       Placement.clearAll();
     });
@@ -369,6 +378,7 @@ const UI = (() => {
         document.getElementById('val-alien-bc-range').textContent = `${alienBcR}m`;
         Placement.setAlienBiocacheChainRange(alienBcR);
       }
+      // Wildlife uses same values as Alien (no separate import needed)
     }
 
     // 3. Apply resource amounts
@@ -401,7 +411,7 @@ const UI = (() => {
       const firstValue = Object.values(data.spawns)[0];
       if (Array.isArray(firstValue)) {
         // Web tool export format: spawns.Sol = [{x, z, isSpawn, isBiocache}, ...]
-        for (const faction of ['Sol', 'Cent', 'Alien']) {
+        for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
           const entries = data.spawns[faction];
           if (!entries || !Array.isArray(entries)) continue;
           for (const entry of entries) {
@@ -412,7 +422,7 @@ const UI = (() => {
         // Server config format: spawns.variant_A.Sol = {x, z}
         const variant = data.spawns.variant_A || Object.values(data.spawns)[0];
         if (variant) {
-          for (const faction of ['Sol', 'Cent', 'Alien']) {
+          for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
             const pos = variant[faction];
             if (!pos || pos.x === undefined) continue;
             Placement.addHQAt(faction, pos.x, pos.z, true, false);
@@ -435,6 +445,7 @@ const UI = (() => {
       document.getElementById('mode-hvh').checked = data.game_modes.hvh ?? true;
       document.getElementById('mode-hva').checked = data.game_modes.hva ?? true;
       document.getElementById('mode-hvhva').checked = data.game_modes.hvhva ?? true;
+      document.getElementById('mode-4way').checked = data.game_modes['4way'] ?? false;
     }
   }
 

@@ -82,6 +82,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .btn-sol { background: rgba(50, 140, 255, 0.2); border-color: #328cff; color: #88bbff; }
 .btn-cent { background: rgba(235, 70, 70, 0.2); border-color: #eb4646; color: #ff8888; }
 .btn-alien { background: rgba(80, 200, 50, 0.2); border-color: #50c832; color: #88ff88; }
+.btn-wildlife { background: rgba(200, 150, 60, 0.2); border-color: #c8963c; color: #e8c088; }
 .btn-clear { background: rgba(255, 255, 255, 0.1); border-color: #555; color: #aaa; }
 .btn-active { outline: 2px solid #fff; outline-offset: -2px; }
 
@@ -173,6 +174,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .hq-marker-sol { background: rgba(50, 140, 255, 0.7); border-color: #4488ff; }
 .hq-marker-cent { background: rgba(235, 70, 70, 0.7); border-color: #ff4444; }
 .hq-marker-alien { background: rgba(80, 200, 50, 0.7); border-color: #50c832; }
+.hq-marker-wildlife { background: rgba(200, 150, 60, 0.7); border-color: #c8963c; }
 
 .expansion-marker {
   border: 2px solid;
@@ -186,6 +188,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .expansion-marker-sol { background: rgba(50, 140, 255, 0.5); border-color: #6699ff; }
 .expansion-marker-cent { background: rgba(235, 70, 70, 0.5); border-color: #ff6666; }
 .expansion-marker-alien { background: rgba(80, 200, 50, 0.5); border-color: #66cc44; }
+.expansion-marker-wildlife { background: rgba(200, 150, 60, 0.5); border-color: #d4a44a; }
 
 .biocache-marker {
   border: 2px solid #66cc44;
