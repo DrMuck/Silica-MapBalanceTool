@@ -32,7 +32,7 @@ const Placement = (() => {
   }
 
   // State
-  let placementMode = null; // 'sol-hq', 'cent-hq', 'alien-nest', 'alien-biocache', 'sol-expand', 'cent-expand', 'alien-expand', 'wildlife-nest', 'wildlife-biocache', 'wildlife-expand'
+  let placementMode = null; // 'sol-hq', 'cent-hq', 'alien-nest', 'alien-biocache', 'sol-expand', 'cent-expand', 'alien-expand', 'wildlife-nest', 'wildlife-biocache', 'wildlife-expand', 'koh', 'fusion-reactor'
   let hqs = {
     Sol: [],  // [{marker, buildCircle, chainCircle, latlng, isSpawn}]
     Cent: [],
@@ -40,6 +40,12 @@ const Placement = (() => {
     Wildlife: [],
   };
   let chainLines = { Sol: [], Cent: [], Alien: [], Wildlife: [] };
+
+  // KoH (single) + Fusion Reactors (many).
+  // koh = null OR {marker, captureCircle, exclusionCircle, latlng, captureR, exclR}
+  // fusionReactors = [{marker, captureCircle, latlng, captureR}, ...]
+  let koh = null;
+  let fusionReactors = [];
 
   // Settings (updated by UI)
   let solBuildRadius = 620;
@@ -52,6 +58,11 @@ const Placement = (() => {
   let wildlifeBuildRadius = 150;
   let wildlifeNodeChainRange = 150;
   let wildlifeBiocacheChainRange = 150;
+
+  // KoH / FusionReactor default radii — used when placing new entries from sliders.
+  let kohCaptureRadius = 50;
+  let kohExclusionRadius = 75;
+  let fusionCaptureRadius = 40;
 
   // Structure half-dimensions: { h: longest side / 2, w: shortest side / 2 }
   // Effective radius = sqrt(R² - h²) - w
@@ -166,6 +177,20 @@ const Placement = (() => {
     // Footprint placement
     if (placementMode && placementMode.startsWith('fp-')) {
       placeFootprint(placementMode.slice(3), snapped);
+      return;
+    }
+
+    // KoH (single — placing a second replaces the first)
+    if (placementMode === 'koh') {
+      addKohAt(worldX, worldZ, kohCaptureRadius, kohExclusionRadius);
+      setPlacementMode(null);
+      return;
+    }
+
+    // Fusion Reactor (multiple)
+    if (placementMode === 'fusion-reactor') {
+      addFusionReactorAt(worldX, worldZ, fusionCaptureRadius);
+      // Stay in mode so user can keep adding reactors. Right-click removes; ESC / re-click button exits.
       return;
     }
 
@@ -664,6 +689,13 @@ const Placement = (() => {
       if (fp.rampIndicators) fp.rampIndicators.forEach(ind => placementGroup.removeLayer(ind));
     });
     footprints = [];
+    // Clear KoH + Fusion Reactors
+    removeKoh();
+    fusionReactors.forEach(fr => {
+      placementGroup.removeLayer(fr.marker);
+      placementGroup.removeLayer(fr.captureCircle);
+    });
+    fusionReactors = [];
     setPlacementMode(null);
     Expansion.update();
   }
@@ -762,6 +794,106 @@ const Placement = (() => {
     return solBuildRadius; // fallback
   }
 
+  // === KoH + Fusion Reactor placement ===
+
+  const KOH_COLOR = '#f0c020';     // amber / gold
+  const FUSION_COLOR = '#22c8ff';  // cyan
+
+  function addKohAt(x, z, captureR, exclR) {
+    // Single per map — replace existing.
+    if (koh) removeKoh();
+
+    const latlng = L.latLng(z, x);
+    const icon = L.divIcon({
+      className: 'koh-marker',
+      html: '<div style="width:14px;height:14px;background:#f0c020;border:2px solid #000;border-radius:2px;transform:rotate(45deg);box-shadow:0 0 4px #000;"></div>',
+      iconSize: [18, 18],
+    });
+    const marker = L.marker(latlng, { icon, draggable: true, zIndexOffset: 1500 }).addTo(placementGroup);
+    marker.bindTooltip('KoH', { permanent: true, direction: 'top', offset: [0, -10], className: 'grid-label' });
+
+    const captureCircle = createCircle(latlng, captureR, {
+      color: KOH_COLOR, fillColor: KOH_COLOR, fillOpacity: 0.10, weight: 2, opacity: 0.8,
+    }).addTo(placementGroup);
+    const exclusionCircle = createCircle(latlng, exclR, {
+      color: KOH_COLOR, fillColor: 'transparent', fillOpacity: 0, weight: 2, opacity: 0.6, dashArray: '8,8',
+    }).addTo(placementGroup);
+
+    koh = { marker, captureCircle, exclusionCircle, latlng, captureR, exclR };
+
+    marker.on('drag', (e) => {
+      const newLatLng = snapToGrid(e.latlng);
+      marker.setLatLng(newLatLng);
+      koh.latlng = newLatLng;
+      updateCirclePosition(koh.captureCircle, newLatLng, koh.captureR);
+      updateCirclePosition(koh.exclusionCircle, newLatLng, koh.exclR);
+    });
+
+    // Right-click to remove
+    marker.on('contextmenu', () => removeKoh());
+  }
+
+  function removeKoh() {
+    if (!koh) return;
+    placementGroup.removeLayer(koh.marker);
+    placementGroup.removeLayer(koh.captureCircle);
+    placementGroup.removeLayer(koh.exclusionCircle);
+    koh = null;
+  }
+
+  function addFusionReactorAt(x, z, captureR) {
+    const latlng = L.latLng(z, x);
+    const icon = L.divIcon({
+      className: 'fusion-marker',
+      html: '<div style="width:12px;height:12px;background:#22c8ff;border:2px solid #000;border-radius:50%;box-shadow:0 0 4px #000;"></div>',
+      iconSize: [16, 16],
+    });
+    const marker = L.marker(latlng, { icon, draggable: true, zIndexOffset: 1400 }).addTo(placementGroup);
+    const idx = fusionReactors.length;
+    marker.bindTooltip(`FR${idx}`, { permanent: true, direction: 'top', offset: [0, -10], className: 'grid-label' });
+
+    const captureCircle = createCircle(latlng, captureR, {
+      color: FUSION_COLOR, fillColor: FUSION_COLOR, fillOpacity: 0.08, weight: 2, opacity: 0.8,
+    }).addTo(placementGroup);
+
+    const entry = { marker, captureCircle, latlng, captureR };
+    fusionReactors.push(entry);
+
+    marker.on('drag', (e) => {
+      const newLatLng = snapToGrid(e.latlng);
+      marker.setLatLng(newLatLng);
+      entry.latlng = newLatLng;
+      updateCirclePosition(entry.captureCircle, newLatLng, entry.captureR);
+    });
+
+    // Right-click to remove
+    marker.on('contextmenu', () => {
+      placementGroup.removeLayer(entry.marker);
+      placementGroup.removeLayer(entry.captureCircle);
+      fusionReactors = fusionReactors.filter(f => f !== entry);
+      // Renumber tooltips after removal
+      fusionReactors.forEach((fr, i) => fr.marker.setTooltipContent(`FR${i}`));
+    });
+  }
+
+  // Setters — used by the UI sliders. Update default for new placements AND resize existing.
+
+  function setKohCaptureRadius(r) {
+    kohCaptureRadius = r;
+    if (koh) { koh.captureR = r; updateCirclePosition(koh.captureCircle, koh.latlng, r); }
+  }
+  function setKohExclusionRadius(r) {
+    kohExclusionRadius = r;
+    if (koh) { koh.exclR = r; updateCirclePosition(koh.exclusionCircle, koh.latlng, r); }
+  }
+  function setFusionCaptureRadius(r) {
+    fusionCaptureRadius = r;
+    fusionReactors.forEach(fr => {
+      fr.captureR = r;
+      updateCirclePosition(fr.captureCircle, fr.latlng, r);
+    });
+  }
+
   function exportLayout() {
     const layout = {};
     layout.map = App.getCurrentMap();
@@ -814,6 +946,25 @@ const Placement = (() => {
       '4way': document.getElementById('mode-4way').checked,
     };
 
+    // KoH (single)
+    if (koh) {
+      layout.koh = {
+        x: koh.latlng.lng,
+        z: koh.latlng.lat,
+        capture_radius: koh.captureR,
+        exclusion_radius: koh.exclR,
+      };
+    }
+
+    // Fusion Reactors (many)
+    if (fusionReactors.length > 0) {
+      layout.fusion_reactors = fusionReactors.map(fr => ({
+        x: fr.latlng.lng,
+        z: fr.latlng.lat,
+        capture_radius: fr.captureR,
+      }));
+    }
+
     return layout;
   }
 
@@ -828,12 +979,17 @@ const Placement = (() => {
     setAlienBuildRadius,
     setAlienNodeChainRange,
     setAlienBiocacheChainRange,
+    setKohCaptureRadius,
+    setKohExclusionRadius,
+    setFusionCaptureRadius,
     getHQs,
     getBuildRadius,
     getChainRange: (faction) => getBaseChainRange(faction),
     getAlienEffectiveRadius: (hqEntry) => effectiveRadius(getStructureChainRange(hqEntry), getHalfDims(hqEntry)),
     exportLayout,
     addHQAt,
+    addKohAt,
+    addFusionReactorAt,
     placeFootprintAt,
     toggleFootprintRotation,
   };

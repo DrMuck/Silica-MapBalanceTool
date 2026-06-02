@@ -35,6 +35,15 @@ const UI = (() => {
     document.getElementById('btn-place-wildlife-biocache').addEventListener('click', () => {
       Placement.setPlacementMode('wildlife-biocache');
     });
+    document.getElementById('btn-place-koh').addEventListener('click', () => {
+      Placement.setPlacementMode('koh');
+    });
+    document.getElementById('btn-place-fusion').addEventListener('click', () => {
+      // Re-clicking the button while already in fusion mode exits.
+      Placement.setPlacementMode(
+        document.getElementById('btn-place-fusion').classList.contains('active') ? null : 'fusion-reactor'
+      );
+    });
     document.getElementById('btn-clear').addEventListener('click', () => {
       Placement.clearAll();
     });
@@ -131,6 +140,31 @@ const UI = (() => {
       const v = parseInt(alienBcSlider.value);
       alienBcVal.textContent = `${v}m`;
       Placement.setAlienBiocacheChainRange(v);
+    });
+
+    // KoH + Fusion Reactor radius sliders
+    const kohCapSlider = document.getElementById('setting-koh-capture');
+    const kohCapVal = document.getElementById('val-koh-capture');
+    kohCapSlider.addEventListener('input', () => {
+      const v = parseInt(kohCapSlider.value);
+      kohCapVal.textContent = `${v}m`;
+      Placement.setKohCaptureRadius(v);
+    });
+
+    const kohExclSlider = document.getElementById('setting-koh-exclusion');
+    const kohExclVal = document.getElementById('val-koh-exclusion');
+    kohExclSlider.addEventListener('input', () => {
+      const v = parseInt(kohExclSlider.value);
+      kohExclVal.textContent = `${v}m`;
+      Placement.setKohExclusionRadius(v);
+    });
+
+    const fusionCapSlider = document.getElementById('setting-fusion-capture');
+    const fusionCapVal = document.getElementById('val-fusion-capture');
+    fusionCapSlider.addEventListener('input', () => {
+      const v = parseInt(fusionCapSlider.value);
+      fusionCapVal.textContent = `${v}m`;
+      Placement.setFusionCaptureRadius(v);
     });
 
     // Export
@@ -446,6 +480,34 @@ const UI = (() => {
       document.getElementById('mode-hva').checked = data.game_modes.hva ?? true;
       document.getElementById('mode-hvhva').checked = data.game_modes.hvhva ?? true;
       document.getElementById('mode-4way').checked = data.game_modes['4way'] ?? false;
+    }
+
+    // 9. KoH (single)
+    if (data.koh && typeof data.koh === 'object') {
+      const capR = data.koh.capture_radius ?? 50;
+      const exclR = data.koh.exclusion_radius ?? 75;
+      // Update sliders so UI reflects the loaded values.
+      const capSlider = document.getElementById('setting-koh-capture');
+      const exclSlider = document.getElementById('setting-koh-exclusion');
+      capSlider.value = capR; document.getElementById('val-koh-capture').textContent = `${capR}m`;
+      exclSlider.value = exclR; document.getElementById('val-koh-exclusion').textContent = `${exclR}m`;
+      Placement.setKohCaptureRadius(capR);
+      Placement.setKohExclusionRadius(exclR);
+      Placement.addKohAt(data.koh.x, data.koh.z, capR, exclR);
+    }
+
+    // 10. Fusion Reactors (many)
+    if (Array.isArray(data.fusion_reactors)) {
+      // Use the first reactor's radius for the default slider; individual entries keep their own.
+      if (data.fusion_reactors.length > 0) {
+        const r0 = data.fusion_reactors[0].capture_radius ?? 40;
+        document.getElementById('setting-fusion-capture').value = r0;
+        document.getElementById('val-fusion-capture').textContent = `${r0}m`;
+        Placement.setFusionCaptureRadius(r0);
+      }
+      for (const fr of data.fusion_reactors) {
+        Placement.addFusionReactorAt(fr.x, fr.z, fr.capture_radius ?? 40);
+      }
     }
   }
 
