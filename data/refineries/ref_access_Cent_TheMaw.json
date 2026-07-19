@@ -847,6 +847,19 @@
  {
   "idx": 65,
   "accessible": true,
+  "n_valid": 8878,
+  "best": {
+   "ref_x": 180.0,
+   "ref_z": -600.0,
+   "ramp_dirX": 0.522,
+   "ramp_dirZ": 0.853,
+   "dist": 303.6,
+   "align": 1.0
+  }
+ },
+ {
+  "idx": 66,
+  "accessible": true,
   "n_valid": 9987,
   "best": {
    "ref_x": -945.0,
@@ -858,7 +871,7 @@
   }
  },
  {
-  "idx": 66,
+  "idx": 67,
   "accessible": true,
   "n_valid": 9001,
   "best": {
@@ -871,7 +884,7 @@
   }
  },
  {
-  "idx": 67,
+  "idx": 68,
   "accessible": true,
   "n_valid": 9123,
   "best": {
@@ -884,7 +897,7 @@
   }
  },
  {
-  "idx": 68,
+  "idx": 69,
   "accessible": true,
   "n_valid": 8909,
   "best": {
@@ -897,7 +910,7 @@
   }
  },
  {
-  "idx": 69,
+  "idx": 70,
   "accessible": true,
   "n_valid": 9143,
   "best": {
@@ -910,7 +923,7 @@
   }
  },
  {
-  "idx": 70,
+  "idx": 71,
   "accessible": true,
   "n_valid": 8514,
   "best": {
@@ -923,7 +936,7 @@
   }
  },
  {
-  "idx": 71,
+  "idx": 72,
   "accessible": true,
   "n_valid": 7604,
   "best": {
@@ -936,7 +949,7 @@
   }
  },
  {
-  "idx": 72,
+  "idx": 73,
   "accessible": true,
   "n_valid": 9231,
   "best": {

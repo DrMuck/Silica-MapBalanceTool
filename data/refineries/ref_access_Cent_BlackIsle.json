@@ -691,7 +691,7 @@
  {
   "idx": 53,
   "accessible": true,
-  "n_valid": 8409,
+  "n_valid": 8407,
   "best": {
    "ref_x": -165.0,
    "ref_z": -135.0,
@@ -717,7 +717,7 @@
  {
   "idx": 55,
   "accessible": true,
-  "n_valid": 5852,
+  "n_valid": 5850,
   "best": {
    "ref_x": 870.0,
    "ref_z": 420.0,
@@ -795,7 +795,7 @@
  {
   "idx": 61,
   "accessible": true,
-  "n_valid": 5125,
+  "n_valid": 5123,
   "best": {
    "ref_x": 285.0,
    "ref_z": -60.0,
@@ -860,7 +860,7 @@
  {
   "idx": 66,
   "accessible": true,
-  "n_valid": 3875,
+  "n_valid": 3874,
   "best": {
    "ref_x": 615.0,
    "ref_z": -660.0,
@@ -938,7 +938,7 @@
  {
   "idx": 72,
   "accessible": true,
-  "n_valid": 7546,
+  "n_valid": 7544,
   "best": {
    "ref_x": 570.0,
    "ref_z": -195.0,
@@ -1042,7 +1042,7 @@
  {
   "idx": 80,
   "accessible": true,
-  "n_valid": 7669,
+  "n_valid": 7668,
   "best": {
    "ref_x": -225.0,
    "ref_z": -210.0,
@@ -1146,7 +1146,7 @@
  {
   "idx": 88,
   "accessible": true,
-  "n_valid": 7512,
+  "n_valid": 7510,
   "best": {
    "ref_x": 60.0,
    "ref_z": 180.0,

@@ -548,7 +548,7 @@
  {
   "idx": 42,
   "accessible": true,
-  "n_valid": 4556,
+  "n_valid": 4557,
   "best": {
    "ref_x": -345.0,
    "ref_z": 1200.0,
@@ -626,7 +626,7 @@
  {
   "idx": 48,
   "accessible": true,
-  "n_valid": 4444,
+  "n_valid": 4445,
   "best": {
    "ref_x": 45.0,
    "ref_z": 120.0,

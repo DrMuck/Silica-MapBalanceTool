@@ -847,6 +847,19 @@
  {
   "idx": 65,
   "accessible": true,
+  "n_valid": 6882,
+  "best": {
+   "ref_x": -90.0,
+   "ref_z": -150.0,
+   "ramp_dirX": 0.914,
+   "ramp_dirZ": -0.407,
+   "dist": 469.0,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 66,
+  "accessible": true,
   "n_valid": 7655,
   "best": {
    "ref_x": -1170.0,
@@ -858,7 +871,7 @@
   }
  },
  {
-  "idx": 66,
+  "idx": 67,
   "accessible": true,
   "n_valid": 6677,
   "best": {
@@ -871,7 +884,7 @@
   }
  },
  {
-  "idx": 67,
+  "idx": 68,
   "accessible": true,
   "n_valid": 6968,
   "best": {
@@ -884,7 +897,7 @@
   }
  },
  {
-  "idx": 68,
+  "idx": 69,
   "accessible": true,
   "n_valid": 6874,
   "best": {
@@ -897,7 +910,7 @@
   }
  },
  {
-  "idx": 69,
+  "idx": 70,
   "accessible": true,
   "n_valid": 7469,
   "best": {
@@ -910,7 +923,7 @@
   }
  },
  {
-  "idx": 70,
+  "idx": 71,
   "accessible": true,
   "n_valid": 7033,
   "best": {
@@ -923,7 +936,7 @@
   }
  },
  {
-  "idx": 71,
+  "idx": 72,
   "accessible": true,
   "n_valid": 5994,
   "best": {
@@ -936,7 +949,7 @@
   }
  },
  {
-  "idx": 72,
+  "idx": 73,
   "accessible": true,
   "n_valid": 7038,
   "best": {

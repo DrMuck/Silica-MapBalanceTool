@@ -6,7 +6,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -3000,
+    "scan_max_x": 3000,
+    "scan_min_z": -3000,
+    "scan_max_z": 3000,
+    "scan_step": 15,
+    "grid_w": 401,
+    "grid_h": 401
   },
   "BlackIsle": {
     "extent": 1000,
@@ -44,7 +51,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -2040,
+    "scan_max_x": 2040,
+    "scan_min_z": -2040,
+    "scan_max_z": 2040,
+    "scan_step": 15,
+    "grid_w": 273,
+    "grid_h": 273
   },
   "CrystalChasm": {
     "extent": 1500,
@@ -52,7 +66,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -1500,
+    "scan_max_x": 1500,
+    "scan_min_z": -1500,
+    "scan_max_z": 1500,
+    "scan_step": 15,
+    "grid_w": 201,
+    "grid_h": 201
   },
   "GreatErg": {
     "extent": 3000,
@@ -60,7 +81,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -3000,
+    "scan_max_x": 3000,
+    "scan_min_z": -3000,
+    "scan_max_z": 3000,
+    "scan_step": 15,
+    "grid_w": 401,
+    "grid_h": 401
   },
   "IndustrialQuarter": {
     "extent": 2000,
@@ -98,7 +126,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -3000,
+    "scan_max_x": 3000,
+    "scan_min_z": -3000,
+    "scan_max_z": 3000,
+    "scan_step": 15,
+    "grid_w": 401,
+    "grid_h": 401
   },
   "NorthPolarCap": {
     "extent": 2048,
@@ -106,7 +141,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -2040,
+    "scan_max_x": 2040,
+    "scan_min_z": -2040,
+    "scan_max_z": 2040,
+    "scan_step": 15,
+    "grid_w": 273,
+    "grid_h": 273
   },
   "RiftBasin": {
     "extent": 1500,
@@ -114,7 +156,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -1500,
+    "scan_max_x": 1500,
+    "scan_min_z": -1500,
+    "scan_max_z": 1500,
+    "scan_step": 15,
+    "grid_w": 201,
+    "grid_h": 201
   },
   "TheMaw": {
     "extent": 1500,
@@ -122,7 +171,14 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -1500,
+    "scan_max_x": 1500,
+    "scan_min_z": -1500,
+    "scan_max_z": 1500,
+    "scan_step": 15,
+    "grid_w": 201,
+    "grid_h": 201
   },
   "WhisperingPlains": {
     "extent": 2048,
@@ -130,6 +186,13 @@ const MAP_CONFIG = {
     "factions": [
       "Sol",
       "Cent"
-    ]
+    ],
+    "scan_min_x": -2040,
+    "scan_max_x": 2040,
+    "scan_min_z": -2040,
+    "scan_max_z": 2040,
+    "scan_step": 15,
+    "grid_w": 273,
+    "grid_h": 273
   }
 };

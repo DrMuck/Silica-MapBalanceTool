@@ -444,6 +444,19 @@
  {
   "idx": 34,
   "accessible": true,
+  "n_valid": 7554,
+  "best": {
+   "ref_x": 0.0,
+   "ref_z": -1110.0,
+   "ramp_dirX": 0.407,
+   "ramp_dirZ": 0.914,
+   "dist": 480.6,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 35,
+  "accessible": true,
   "n_valid": 6228,
   "best": {
    "ref_x": -1935.0,
@@ -455,7 +468,7 @@
   }
  },
  {
-  "idx": 35,
+  "idx": 36,
   "accessible": true,
   "n_valid": 5410,
   "best": {
@@ -468,7 +481,7 @@
   }
  },
  {
-  "idx": 36,
+  "idx": 37,
   "accessible": true,
   "n_valid": 5997,
   "best": {
@@ -481,7 +494,7 @@
   }
  },
  {
-  "idx": 37,
+  "idx": 38,
   "accessible": true,
   "n_valid": 8585,
   "best": {
@@ -494,7 +507,7 @@
   }
  },
  {
-  "idx": 38,
+  "idx": 39,
   "accessible": true,
   "n_valid": 8343,
   "best": {
@@ -507,7 +520,7 @@
   }
  },
  {
-  "idx": 39,
+  "idx": 40,
   "accessible": true,
   "n_valid": 9414,
   "best": {
@@ -520,7 +533,7 @@
   }
  },
  {
-  "idx": 40,
+  "idx": 41,
   "accessible": true,
   "n_valid": 7233,
   "best": {
@@ -533,7 +546,7 @@
   }
  },
  {
-  "idx": 41,
+  "idx": 42,
   "accessible": true,
   "n_valid": 8171,
   "best": {
@@ -546,7 +559,7 @@
   }
  },
  {
-  "idx": 42,
+  "idx": 43,
   "accessible": true,
   "n_valid": 6955,
   "best": {
@@ -559,7 +572,7 @@
   }
  },
  {
-  "idx": 43,
+  "idx": 44,
   "accessible": true,
   "n_valid": 8060,
   "best": {
@@ -572,7 +585,7 @@
   }
  },
  {
-  "idx": 44,
+  "idx": 45,
   "accessible": true,
   "n_valid": 8076,
   "best": {
@@ -585,7 +598,7 @@
   }
  },
  {
-  "idx": 45,
+  "idx": 46,
   "accessible": true,
   "n_valid": 9115,
   "best": {
@@ -598,7 +611,20 @@
   }
  },
  {
-  "idx": 46,
+  "idx": 47,
+  "accessible": true,
+  "n_valid": 5988,
+  "best": {
+   "ref_x": 660.0,
+   "ref_z": -1185.0,
+   "ramp_dirX": -0.407,
+   "ramp_dirZ": -0.914,
+   "dist": 595.0,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 48,
   "accessible": true,
   "n_valid": 8371,
   "best": {
@@ -611,7 +637,7 @@
   }
  },
  {
-  "idx": 47,
+  "idx": 49,
   "accessible": true,
   "n_valid": 9135,
   "best": {
@@ -624,7 +650,7 @@
   }
  },
  {
-  "idx": 48,
+  "idx": 50,
   "accessible": true,
   "n_valid": 9206,
   "best": {
@@ -637,7 +663,7 @@
   }
  },
  {
-  "idx": 49,
+  "idx": 51,
   "accessible": true,
   "n_valid": 9447,
   "best": {
@@ -650,7 +676,33 @@
   }
  },
  {
-  "idx": 50,
+  "idx": 52,
+  "accessible": true,
+  "n_valid": 7928,
+  "best": {
+   "ref_x": -585.0,
+   "ref_z": 1515.0,
+   "ramp_dirX": -0.407,
+   "ramp_dirZ": -0.914,
+   "dist": 292.3,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 53,
+  "accessible": true,
+  "n_valid": 8223,
+  "best": {
+   "ref_x": 195.0,
+   "ref_z": -555.0,
+   "ramp_dirX": 0.914,
+   "ramp_dirZ": -0.407,
+   "dist": 371.1,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 54,
   "accessible": true,
   "n_valid": 8753,
   "best": {
@@ -663,7 +715,7 @@
   }
  },
  {
-  "idx": 51,
+  "idx": 55,
   "accessible": true,
   "n_valid": 8239,
   "best": {
@@ -676,7 +728,33 @@
   }
  },
  {
-  "idx": 52,
+  "idx": 56,
+  "accessible": true,
+  "n_valid": 8333,
+  "best": {
+   "ref_x": -675.0,
+   "ref_z": -165.0,
+   "ramp_dirX": -0.407,
+   "ramp_dirZ": -0.914,
+   "dist": 134.7,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 57,
+  "accessible": true,
+  "n_valid": 5275,
+  "best": {
+   "ref_x": -1020.0,
+   "ref_z": -300.0,
+   "ramp_dirX": -0.914,
+   "ramp_dirZ": 0.407,
+   "dist": 540.8,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 58,
   "accessible": true,
   "n_valid": 6964,
   "best": {
@@ -689,7 +767,7 @@
   }
  },
  {
-  "idx": 53,
+  "idx": 59,
   "accessible": true,
   "n_valid": 10042,
   "best": {
@@ -702,7 +780,7 @@
   }
  },
  {
-  "idx": 54,
+  "idx": 60,
   "accessible": true,
   "n_valid": 7452,
   "best": {
@@ -715,7 +793,7 @@
   }
  },
  {
-  "idx": 55,
+  "idx": 61,
   "accessible": true,
   "n_valid": 6492,
   "best": {
@@ -728,7 +806,7 @@
   }
  },
  {
-  "idx": 56,
+  "idx": 62,
   "accessible": true,
   "n_valid": 10503,
   "best": {
@@ -741,7 +819,7 @@
   }
  },
  {
-  "idx": 57,
+  "idx": 63,
   "accessible": true,
   "n_valid": 7071,
   "best": {
@@ -754,7 +832,7 @@
   }
  },
  {
-  "idx": 58,
+  "idx": 64,
   "accessible": true,
   "n_valid": 6766,
   "best": {
@@ -767,7 +845,7 @@
   }
  },
  {
-  "idx": 59,
+  "idx": 65,
   "accessible": true,
   "n_valid": 7182,
   "best": {
@@ -780,7 +858,7 @@
   }
  },
  {
-  "idx": 60,
+  "idx": 66,
   "accessible": true,
   "n_valid": 6744,
   "best": {
@@ -793,7 +871,7 @@
   }
  },
  {
-  "idx": 61,
+  "idx": 67,
   "accessible": true,
   "n_valid": 7591,
   "best": {
@@ -806,7 +884,7 @@
   }
  },
  {
-  "idx": 62,
+  "idx": 68,
   "accessible": true,
   "n_valid": 8277,
   "best": {
@@ -819,7 +897,46 @@
   }
  },
  {
-  "idx": 63,
+  "idx": 69,
+  "accessible": true,
+  "n_valid": 6146,
+  "best": {
+   "ref_x": -315.0,
+   "ref_z": -1425.0,
+   "ramp_dirX": 0.914,
+   "ramp_dirZ": -0.407,
+   "dist": 478.9,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 70,
+  "accessible": true,
+  "n_valid": 9149,
+  "best": {
+   "ref_x": 870.0,
+   "ref_z": 1065.0,
+   "ramp_dirX": -0.407,
+   "ramp_dirZ": -0.914,
+   "dist": 245.8,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 71,
+  "accessible": true,
+  "n_valid": 8284,
+  "best": {
+   "ref_x": -450.0,
+   "ref_z": 1335.0,
+   "ramp_dirX": -0.914,
+   "ramp_dirZ": 0.407,
+   "dist": 278.0,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 72,
   "accessible": true,
   "n_valid": 7550,
   "best": {
@@ -832,7 +949,7 @@
   }
  },
  {
-  "idx": 64,
+  "idx": 73,
   "accessible": true,
   "n_valid": 7834,
   "best": {
@@ -845,7 +962,7 @@
   }
  },
  {
-  "idx": 65,
+  "idx": 74,
   "accessible": true,
   "n_valid": 6942,
   "best": {
@@ -858,7 +975,20 @@
   }
  },
  {
-  "idx": 66,
+  "idx": 75,
+  "accessible": true,
+  "n_valid": 6323,
+  "best": {
+   "ref_x": -300.0,
+   "ref_z": -1515.0,
+   "ramp_dirX": 0.914,
+   "ramp_dirZ": -0.407,
+   "dist": 137.2,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 76,
   "accessible": true,
   "n_valid": 8046,
   "best": {
@@ -871,7 +1001,7 @@
   }
  },
  {
-  "idx": 67,
+  "idx": 77,
   "accessible": true,
   "n_valid": 9391,
   "best": {
@@ -884,7 +1014,7 @@
   }
  },
  {
-  "idx": 68,
+  "idx": 78,
   "accessible": true,
   "n_valid": 7600,
   "best": {
@@ -897,7 +1027,7 @@
   }
  },
  {
-  "idx": 69,
+  "idx": 79,
   "accessible": true,
   "n_valid": 8194,
   "best": {
@@ -910,7 +1040,7 @@
   }
  },
  {
-  "idx": 70,
+  "idx": 80,
   "accessible": true,
   "n_valid": 8314,
   "best": {
@@ -923,7 +1053,7 @@
   }
  },
  {
-  "idx": 71,
+  "idx": 81,
   "accessible": true,
   "n_valid": 6377,
   "best": {
@@ -936,7 +1066,7 @@
   }
  },
  {
-  "idx": 72,
+  "idx": 82,
   "accessible": true,
   "n_valid": 6752,
   "best": {
@@ -949,7 +1079,7 @@
   }
  },
  {
-  "idx": 73,
+  "idx": 83,
   "accessible": true,
   "n_valid": 6739,
   "best": {
@@ -962,7 +1092,7 @@
   }
  },
  {
-  "idx": 74,
+  "idx": 84,
   "accessible": true,
   "n_valid": 8164,
   "best": {
@@ -975,7 +1105,7 @@
   }
  },
  {
-  "idx": 75,
+  "idx": 85,
   "accessible": true,
   "n_valid": 8791,
   "best": {
@@ -988,7 +1118,7 @@
   }
  },
  {
-  "idx": 76,
+  "idx": 86,
   "accessible": true,
   "n_valid": 8857,
   "best": {
@@ -1001,7 +1131,7 @@
   }
  },
  {
-  "idx": 77,
+  "idx": 87,
   "accessible": true,
   "n_valid": 6192,
   "best": {
@@ -1014,7 +1144,7 @@
   }
  },
  {
-  "idx": 78,
+  "idx": 88,
   "accessible": true,
   "n_valid": 8403,
   "best": {
@@ -1027,7 +1157,7 @@
   }
  },
  {
-  "idx": 79,
+  "idx": 89,
   "accessible": true,
   "n_valid": 7021,
   "best": {
@@ -1040,7 +1170,7 @@
   }
  },
  {
-  "idx": 80,
+  "idx": 90,
   "accessible": true,
   "n_valid": 5834,
   "best": {
@@ -1053,7 +1183,33 @@
   }
  },
  {
-  "idx": 81,
+  "idx": 91,
+  "accessible": true,
+  "n_valid": 8633,
+  "best": {
+   "ref_x": -750.0,
+   "ref_z": -930.0,
+   "ramp_dirX": 0.407,
+   "ramp_dirZ": 0.914,
+   "dist": 451.5,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 92,
+  "accessible": true,
+  "n_valid": 4662,
+  "best": {
+   "ref_x": -1905.0,
+   "ref_z": -390.0,
+   "ramp_dirX": 0.407,
+   "ramp_dirZ": 0.914,
+   "dist": 204.0,
+   "align": 1.001
+  }
+ },
+ {
+  "idx": 93,
   "accessible": true,
   "n_valid": 7563,
   "best": {

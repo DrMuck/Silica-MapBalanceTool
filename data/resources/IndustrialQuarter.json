@@ -32,7 +32,7 @@
    "idx": 1,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -231.3,
    "y": 270.3,
    "z": 229.6,
@@ -80,7 +80,7 @@
    "idx": 4,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 538.5,
    "y": 270.4,
    "z": -663.2,
@@ -128,7 +128,7 @@
    "idx": 7,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -483.8,
    "y": 270.3,
    "z": 483.8,
@@ -176,7 +176,7 @@
    "idx": 10,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -345.5,
    "y": 283.4,
    "z": -1545.4,
@@ -192,7 +192,7 @@
    "idx": 11,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -1503.5,
    "y": 270.3,
    "z": -91.2,
@@ -208,7 +208,7 @@
    "idx": 12,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -1319.5,
    "y": 270.3,
    "z": 100.8,
@@ -256,7 +256,7 @@
    "idx": 15,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 1015.7,
    "y": 270.3,
    "z": -116.7,
@@ -288,7 +288,7 @@
    "idx": 17,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 254.5,
    "y": 283.4,
    "z": 855.0,
@@ -368,7 +368,7 @@
    "idx": 22,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -202.5,
    "y": 270.3,
    "z": 696.3,
@@ -400,7 +400,7 @@
    "idx": 24,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 1289.5,
    "y": 270.4,
    "z": -213.4,
@@ -416,7 +416,7 @@
    "idx": 25,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 961.2,
    "y": 270.3,
    "z": 683.8,
@@ -432,7 +432,7 @@
    "idx": 26,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -231.3,
    "y": 270.2,
    "z": -121.4,
@@ -464,7 +464,7 @@
    "idx": 28,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -345.5,
    "y": 283.4,
    "z": -945.4,
@@ -512,7 +512,7 @@
    "idx": 31,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 254.5,
    "y": 283.4,
    "z": -946.4,
@@ -528,7 +528,7 @@
    "idx": 32,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -945.5,
    "y": 283.4,
    "z": 1454.0,
@@ -609,6 +609,22 @@
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
+   "x": 1545.4,
+   "y": 283.4,
+   "z": 1453.9,
+   "grid_w": 1,
+   "grid_h": 1,
+   "cell_size": 9.0,
+   "world_w": 9.0,
+   "world_h": 9.0,
+   "resources_current": 22000,
+   "resources_max": 22000
+  },
+  {
+   "idx": 38,
+   "name": "ResourceArea_Biotics_TarPit",
+   "type": "Biotics",
+   "active": true,
    "x": 483.0,
    "y": 270.3,
    "z": 716.8,
@@ -621,7 +637,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 38,
+   "idx": 39,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -637,7 +653,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 39,
+   "idx": 40,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -653,7 +669,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 40,
+   "idx": 41,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -669,7 +685,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 41,
+   "idx": 42,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -685,7 +701,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 42,
+   "idx": 43,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -701,7 +717,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 43,
+   "idx": 44,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -717,7 +733,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 44,
+   "idx": 45,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -733,7 +749,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 45,
+   "idx": 46,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -749,7 +765,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 46,
+   "idx": 47,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -765,7 +781,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 47,
+   "idx": 48,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -781,7 +797,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 48,
+   "idx": 49,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -797,7 +813,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 49,
+   "idx": 50,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -813,7 +829,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 50,
+   "idx": 51,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -829,7 +845,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 51,
+   "idx": 52,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -845,10 +861,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 52,
+   "idx": 53,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 553.5,
    "y": 283.4,
    "z": 1454.0,
@@ -861,10 +877,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 53,
+   "idx": 54,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 229.5,
    "y": 270.3,
    "z": 120.6,
@@ -877,7 +893,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 54,
+   "idx": 55,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -893,7 +909,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 55,
+   "idx": 56,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -909,7 +925,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 56,
+   "idx": 57,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -925,10 +941,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 57,
+   "idx": 58,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 662.5,
    "y": 270.4,
    "z": -540.4,
@@ -941,10 +957,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 58,
+   "idx": 59,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 123.7,
    "y": 270.3,
    "z": -230.4,
@@ -957,7 +973,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 59,
+   "idx": 60,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -973,27 +989,11 @@
    "resources_max": 22000
   },
   {
-   "idx": 60,
-   "name": "ResourceArea_Biotics_TarPit",
-   "type": "Biotics",
-   "active": true,
-   "x": 1453.7,
-   "y": 283.4,
-   "z": -1545.4,
-   "grid_w": 1,
-   "grid_h": 1,
-   "cell_size": 9.0,
-   "world_w": 9.0,
-   "world_h": 9.0,
-   "resources_current": 22000,
-   "resources_max": 22000
-  },
-  {
    "idx": 61,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
-   "x": 255.5,
+   "x": 1453.7,
    "y": 283.4,
    "z": -1545.4,
    "grid_w": 1,
@@ -1009,6 +1009,22 @@
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
+   "x": 255.5,
+   "y": 283.4,
+   "z": -1545.4,
+   "grid_w": 1,
+   "grid_h": 1,
+   "cell_size": 9.0,
+   "world_w": 9.0,
+   "world_h": 9.0,
+   "resources_current": 22000,
+   "resources_max": 22000
+  },
+  {
+   "idx": 63,
+   "name": "ResourceArea_Biotics_TarPit",
+   "type": "Biotics",
+   "active": true,
    "x": -1453.5,
    "y": 283.4,
    "z": -853.4,
@@ -1021,7 +1037,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 63,
+   "idx": 64,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1037,7 +1053,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 64,
+   "idx": 65,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1053,7 +1069,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 65,
+   "idx": 66,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1069,7 +1085,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 66,
+   "idx": 67,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1085,7 +1101,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 67,
+   "idx": 68,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1101,7 +1117,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 68,
+   "idx": 69,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1117,7 +1133,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 69,
+   "idx": 70,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1133,7 +1149,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 70,
+   "idx": 71,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1149,7 +1165,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 71,
+   "idx": 72,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1165,10 +1181,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 72,
+   "idx": 73,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -1141.5,
    "y": 270.3,
    "z": 453.8,
@@ -1181,7 +1197,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 73,
+   "idx": 74,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1197,7 +1213,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 74,
+   "idx": 75,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1213,7 +1229,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 75,
+   "idx": 76,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1229,7 +1245,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 76,
+   "idx": 77,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1245,7 +1261,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 77,
+   "idx": 78,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1261,7 +1277,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 78,
+   "idx": 79,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1277,7 +1293,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 79,
+   "idx": 80,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1293,10 +1309,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 80,
+   "idx": 81,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -854.5,
    "y": 283.4,
    "z": 947.0,
@@ -1309,7 +1325,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 81,
+   "idx": 82,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1325,7 +1341,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 82,
+   "idx": 83,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1341,7 +1357,23 @@
    "resources_max": 22000
   },
   {
-   "idx": 83,
+   "idx": 84,
+   "name": "ResourceArea_Biotics_TarPit",
+   "type": "Biotics",
+   "active": true,
+   "x": 1453.4,
+   "y": 283.4,
+   "z": 1545.7,
+   "grid_w": 1,
+   "grid_h": 1,
+   "cell_size": 9.0,
+   "world_w": 9.0,
+   "world_h": 9.0,
+   "resources_current": 22000,
+   "resources_max": 22000
+  },
+  {
+   "idx": 85,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1357,7 +1389,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 84,
+   "idx": 86,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1373,10 +1405,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 85,
+   "idx": 87,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -254.5,
    "y": 283.4,
    "z": -853.4,
@@ -1389,7 +1421,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 86,
+   "idx": 88,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1405,7 +1437,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 87,
+   "idx": 89,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1421,7 +1453,7 @@
    "resources_max": 79200
   },
   {
-   "idx": 88,
+   "idx": 90,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1437,10 +1469,10 @@
    "resources_max": 60800
   },
   {
-   "idx": 89,
+   "idx": 91,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": 731.2,
    "y": 259.0,
    "z": -1203.9,
@@ -1453,10 +1485,10 @@
    "resources_max": 80800
   },
   {
-   "idx": 90,
+   "idx": 92,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": -1644.1,
    "y": 259.1,
    "z": 1204.5,
@@ -1469,7 +1501,7 @@
    "resources_max": 66400
   },
   {
-   "idx": 91,
+   "idx": 93,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1485,7 +1517,7 @@
    "resources_max": 70000
   },
   {
-   "idx": 92,
+   "idx": 94,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1501,7 +1533,7 @@
    "resources_max": 66800
   },
   {
-   "idx": 93,
+   "idx": 95,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1517,10 +1549,10 @@
    "resources_max": 81200
   },
   {
-   "idx": 94,
+   "idx": 96,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": 1651.1,
    "y": 258.9,
    "z": 1201.0,
@@ -1533,7 +1565,7 @@
    "resources_max": 66400
   },
   {
-   "idx": 95,
+   "idx": 97,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1549,10 +1581,10 @@
    "resources_max": 68400
   },
   {
-   "idx": 96,
+   "idx": 98,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": -1202.2,
    "y": 258.5,
    "z": 750.5,
@@ -1565,7 +1597,7 @@
    "resources_max": 66800
   },
   {
-   "idx": 97,
+   "idx": 99,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1581,7 +1613,7 @@
    "resources_max": 80800
   },
   {
-   "idx": 98,
+   "idx": 100,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1597,7 +1629,7 @@
    "resources_max": 79200
   },
   {
-   "idx": 99,
+   "idx": 101,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1613,7 +1645,7 @@
    "resources_max": 77200
   },
   {
-   "idx": 100,
+   "idx": 102,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1629,7 +1661,7 @@
    "resources_max": 92000
   },
   {
-   "idx": 101,
+   "idx": 103,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1645,7 +1677,7 @@
    "resources_max": 64000
   },
   {
-   "idx": 102,
+   "idx": 104,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1661,7 +1693,7 @@
    "resources_max": 66400
   },
   {
-   "idx": 103,
+   "idx": 105,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1677,7 +1709,7 @@
    "resources_max": 76000
   },
   {
-   "idx": 104,
+   "idx": 106,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1693,7 +1725,7 @@
    "resources_max": 79600
   },
   {
-   "idx": 105,
+   "idx": 107,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1709,7 +1741,7 @@
    "resources_max": 64000
   },
   {
-   "idx": 106,
+   "idx": 108,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1725,7 +1757,7 @@
    "resources_max": 77600
   },
   {
-   "idx": 107,
+   "idx": 109,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1741,10 +1773,10 @@
    "resources_max": 70000
   },
   {
-   "idx": 108,
+   "idx": 110,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": -1693.1,
    "y": 258.1,
    "z": -2.0,
@@ -1757,10 +1789,10 @@
    "resources_max": 62800
   },
   {
-   "idx": 109,
+   "idx": 111,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": 1202.5,
    "y": 259.7,
    "z": 732.6,
@@ -1773,7 +1805,7 @@
    "resources_max": 82400
   },
   {
-   "idx": 110,
+   "idx": 112,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1789,7 +1821,7 @@
    "resources_max": 96400
   },
   {
-   "idx": 111,
+   "idx": 113,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1805,7 +1837,7 @@
    "resources_max": 79200
   },
   {
-   "idx": 112,
+   "idx": 114,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1821,7 +1853,7 @@
    "resources_max": 64000
   },
   {
-   "idx": 113,
+   "idx": 115,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1837,7 +1869,7 @@
    "resources_max": 77600
   },
   {
-   "idx": 114,
+   "idx": 116,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1853,7 +1885,7 @@
    "resources_max": 70000
   },
   {
-   "idx": 115,
+   "idx": 117,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
    "active": true,
@@ -1869,10 +1901,10 @@
    "resources_max": 76000
   },
   {
-   "idx": 116,
+   "idx": 118,
    "name": "ResourceArea_Balterium",
    "type": "Balterium",
-   "active": false,
+   "active": true,
    "x": -485.3,
    "y": 259.2,
    "z": 1198.9,
@@ -1885,10 +1917,10 @@
    "resources_max": 79600
   },
   {
-   "idx": 117,
+   "idx": 119,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 492.0,
    "y": 257.1,
    "z": -847.9,
@@ -1901,7 +1933,23 @@
    "resources_max": 22000
   },
   {
-   "idx": 118,
+   "idx": 120,
+   "name": "ResourceArea_Biotics_TarPit",
+   "type": "Biotics",
+   "active": true,
+   "x": 1453.4,
+   "y": 283.4,
+   "z": 1453.9,
+   "grid_w": 1,
+   "grid_h": 1,
+   "cell_size": 9.0,
+   "world_w": 9.0,
+   "world_h": 9.0,
+   "resources_current": 22000,
+   "resources_max": 22000
+  },
+  {
+   "idx": 121,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1917,7 +1965,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 119,
+   "idx": 122,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1933,7 +1981,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 120,
+   "idx": 123,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1949,10 +1997,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 121,
+   "idx": 124,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 1441.5,
    "y": 270.4,
    "z": -836.4,
@@ -1965,7 +2013,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 122,
+   "idx": 125,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1981,7 +2029,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 123,
+   "idx": 126,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -1997,7 +2045,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 124,
+   "idx": 127,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2013,7 +2061,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 125,
+   "idx": 128,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2029,7 +2077,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 126,
+   "idx": 129,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2045,7 +2093,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 127,
+   "idx": 130,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2061,7 +2109,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 128,
+   "idx": 131,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2077,7 +2125,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 129,
+   "idx": 132,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2093,7 +2141,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 130,
+   "idx": 133,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2109,7 +2157,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 131,
+   "idx": 134,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2125,7 +2173,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 132,
+   "idx": 135,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2141,10 +2189,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 133,
+   "idx": 136,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 945.5,
    "y": 283.4,
    "z": -1545.4,
@@ -2157,7 +2205,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 134,
+   "idx": 137,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2173,7 +2221,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 135,
+   "idx": 138,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2189,7 +2237,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 136,
+   "idx": 139,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2205,7 +2253,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 137,
+   "idx": 140,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2221,7 +2269,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 138,
+   "idx": 141,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2237,7 +2285,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 139,
+   "idx": 142,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2253,7 +2301,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 140,
+   "idx": 143,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2269,10 +2317,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 141,
+   "idx": 144,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 1563.5,
    "y": 270.3,
    "z": 240.6,
@@ -2285,7 +2333,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 142,
+   "idx": 145,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2301,7 +2349,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 143,
+   "idx": 146,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2317,7 +2365,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 144,
+   "idx": 147,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2333,7 +2381,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 145,
+   "idx": 148,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2349,7 +2397,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 146,
+   "idx": 149,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2365,10 +2413,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 147,
+   "idx": 150,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -231.3,
    "y": 270.3,
    "z": 122.6,
@@ -2381,10 +2429,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 148,
+   "idx": 151,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 345.7,
    "y": 283.4,
    "z": 853.6,
@@ -2397,7 +2445,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 149,
+   "idx": 152,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2413,7 +2461,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 150,
+   "idx": 153,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2429,7 +2477,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 151,
+   "idx": 154,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2445,7 +2493,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 152,
+   "idx": 155,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2461,7 +2509,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 153,
+   "idx": 156,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2477,7 +2525,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 154,
+   "idx": 157,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2493,10 +2541,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 155,
+   "idx": 158,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 829.0,
    "y": 270.4,
    "z": -899.9,
@@ -2509,10 +2557,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 156,
+   "idx": 159,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 346.5,
    "y": 283.4,
    "z": -1545.4,
@@ -2525,10 +2573,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 157,
+   "idx": 160,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 1545.5,
    "y": 283.4,
    "z": -1545.4,
@@ -2541,10 +2589,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 158,
+   "idx": 161,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 120.7,
    "y": 270.3,
    "z": -122.4,
@@ -2557,10 +2605,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 159,
+   "idx": 162,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 252.7,
    "y": 283.4,
    "z": 346.6,
@@ -2573,7 +2621,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 160,
+   "idx": 163,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2589,7 +2637,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 161,
+   "idx": 164,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2605,10 +2653,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 162,
+   "idx": 165,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 853.7,
    "y": 283.4,
    "z": -1453.4,
@@ -2621,7 +2669,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 163,
+   "idx": 166,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2637,7 +2685,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 164,
+   "idx": 167,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2653,7 +2701,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 165,
+   "idx": 168,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2669,7 +2717,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 166,
+   "idx": 169,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2685,7 +2733,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 167,
+   "idx": 170,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2701,7 +2749,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 168,
+   "idx": 171,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2717,7 +2765,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 169,
+   "idx": 172,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2733,7 +2781,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 170,
+   "idx": 173,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2749,10 +2797,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 171,
+   "idx": 174,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -1547.3,
    "y": 283.4,
    "z": -1453.4,
@@ -2765,7 +2813,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 172,
+   "idx": 175,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2781,7 +2829,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 173,
+   "idx": 176,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2797,7 +2845,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 174,
+   "idx": 177,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2813,10 +2861,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 175,
+   "idx": 178,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -1454.5,
    "y": 283.4,
    "z": 853.6,
@@ -2829,7 +2877,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 176,
+   "idx": 179,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2845,7 +2893,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 177,
+   "idx": 180,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2861,7 +2909,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 178,
+   "idx": 181,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2877,7 +2925,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 179,
+   "idx": 182,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2893,10 +2941,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 180,
+   "idx": 183,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 820.5,
    "y": 270.3,
    "z": 521.8,
@@ -2909,7 +2957,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 181,
+   "idx": 184,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2925,7 +2973,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 182,
+   "idx": 185,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2941,7 +2989,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 183,
+   "idx": 186,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2957,7 +3005,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 184,
+   "idx": 187,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2969,11 +3017,11 @@
    "cell_size": 9.0,
    "world_w": 9.0,
    "world_h": 9.0,
-   "resources_current": 21640,
+   "resources_current": 22000,
    "resources_max": 22000
   },
   {
-   "idx": 185,
+   "idx": 188,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -2989,10 +3037,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 186,
+   "idx": 189,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": 683.0,
    "y": 270.3,
    "z": -82.8,
@@ -3005,7 +3053,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 187,
+   "idx": 190,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3021,7 +3069,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 188,
+   "idx": 191,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3037,10 +3085,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 189,
+   "idx": 192,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -949.3,
    "y": 283.4,
    "z": 946.6,
@@ -3053,7 +3101,23 @@
    "resources_max": 22000
   },
   {
-   "idx": 190,
+   "idx": 193,
+   "name": "ResourceArea_Biotics_TarPit",
+   "type": "Biotics",
+   "active": true,
+   "x": 1545.4,
+   "y": 283.4,
+   "z": 1545.7,
+   "grid_w": 1,
+   "grid_h": 1,
+   "cell_size": 9.0,
+   "world_w": 9.0,
+   "world_h": 9.0,
+   "resources_current": 22000,
+   "resources_max": 22000
+  },
+  {
+   "idx": 194,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3069,10 +3133,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 191,
+   "idx": 195,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -947.3,
    "y": 283.4,
    "z": 1546.6,
@@ -3085,7 +3149,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 192,
+   "idx": 196,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3101,10 +3165,10 @@
    "resources_max": 22000
   },
   {
-   "idx": 193,
+   "idx": 197,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
-   "active": false,
+   "active": true,
    "x": -716.8,
    "y": 270.3,
    "z": -716.8,
@@ -3117,7 +3181,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 194,
+   "idx": 198,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3133,7 +3197,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 195,
+   "idx": 199,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3149,7 +3213,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 196,
+   "idx": 200,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
@@ -3165,7 +3229,7 @@
    "resources_max": 22000
   },
   {
-   "idx": 197,
+   "idx": 201,
    "name": "ResourceArea_Biotics_TarPit",
    "type": "Biotics",
    "active": true,
