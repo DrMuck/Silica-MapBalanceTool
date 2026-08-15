@@ -37,6 +37,7 @@ const App = (() => {
 
     // Init modules
     Placement.init(map);
+    Measure.init(map);
     Expansion.init(map);
     UI.init();
 
@@ -60,6 +61,7 @@ const App = (() => {
 
     // Clear existing layers
     Placement.clearAll();
+    Measure.clear();
     if (baseLayer) map.removeLayer(baseLayer);
     if (Layers.gridLayer) map.removeLayer(Layers.gridLayer);
     if (Layers.balteriumLayer) map.removeLayer(Layers.balteriumLayer);

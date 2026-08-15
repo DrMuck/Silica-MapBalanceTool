@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-15 — Measure box
+
+### Added
+- **Measure box** tool: click *Measure Box*, then drag on the map to draw a rectangle
+  - Reports patch count and resource total for Balterium and Biotics inside the box, plus each one's share of the map total
+  - Uses the amounts currently in effect (global sliders and per-patch overrides); excluded patches are counted separately, not summed
+  - Flags patches inside the box that have no valid refinery spot
+  - Lists the patch indices inside the box — paste straight into `removed_patches`
+  - Corner handles resize the box, dragging the body moves it; readout updates live
+  - Escape or *Clear Box* dismisses it; arming a placement tool disarms the box and vice versa
+
 ## 2026-03-04
 
 ### Fixed

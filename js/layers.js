@@ -384,6 +384,9 @@ const Layers = (() => {
 
     const fmt = n => n >= 1000 ? `${(n / 1000).toFixed(0)}K` : `${n}`;
     el.innerHTML = `Total: <span style="color:#fff;">${fmt(baltTotal)}</span> Balt (${baltCount}p) · <span style="color:#9b30ff;">${fmt(bioTotal)}</span> Bio (${bioCount}p)`;
+
+    // Keep the measure box readout in sync with amount/exclusion changes
+    if (typeof Measure !== 'undefined') Measure.refresh();
   }
 
   function loadMaskOverlay(type, faction, mapName, cfg) {

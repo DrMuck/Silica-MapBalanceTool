@@ -475,6 +475,8 @@ const Placement = (() => {
   }
 
   function setPlacementMode(mode) {
+    // Placing and measuring both own the drag gesture — only one can be active
+    if (mode && typeof Measure !== 'undefined' && Measure.isArmed()) Measure.disarm();
     placementMode = mode;
 
     // Update button states

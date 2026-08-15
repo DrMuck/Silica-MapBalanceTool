@@ -48,6 +48,15 @@ const UI = (() => {
       Placement.clearAll();
     });
 
+    // Measure box
+    document.getElementById('btn-measure').addEventListener('click', () => {
+      Measure.toggle();
+    });
+    document.getElementById('btn-measure-clear').addEventListener('click', () => {
+      Measure.disarm();
+      Measure.clear();
+    });
+
     // Footprint buttons
     document.getElementById('btn-fp-sol-hq').addEventListener('click', () => {
       Placement.setPlacementMode('fp-sol-hq');
@@ -206,6 +215,7 @@ const UI = (() => {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         Placement.setPlacementMode(null);
+        Measure.disarm();
       }
       if (e.key === 'r' || e.key === 'R') {
         const rot = Placement.toggleFootprintRotation();
