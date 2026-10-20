@@ -3,7 +3,7 @@
 Verify that preprocessed resource data reflects VANILLA map state, not a state
 that Si_MapBalance already modified.
 
-The mod applies a per-round layout from UserData/Spawns/{Map}/layout_*.json which
+The mod applies a per-round layout from UserData/cfg/Spawns/{Map}/layout_*.json which
 can disable patches (removed_patches), override individual amounts (patch_overrides),
 and force global amounts (balterium_amount / biotics_amount). If !mapdump runs after
 that has been applied, the dump captures the MODIFIED map and the tool's reference
@@ -26,7 +26,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 RES_DIR = SCRIPT_DIR / "data" / "resources"
-SPAWNS_DIR = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\UserData\Spawns")
+SPAWNS_DIR = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\UserData\cfg\Spawns")
 
 # If this fraction or more of a layout's removed_patches are inactive in our data,
 # treat it as evidence the layout was applied before the dump.
@@ -172,7 +172,7 @@ def main():
     print("\n" + "=" * 60)
     if bad:
         print(f"{len(bad)} map(s) look layout-modified: {', '.join(bad)}")
-        print("Re-dump these BEFORE a round starts (or with UserData/Spawns moved aside)")
+        print("Re-dump these BEFORE a round starts (or with UserData/cfg/Spawns moved aside)")
         print("so the dump captures vanilla map state.")
     else:
         print(f"All {len(maps)} map(s) look vanilla — no layout effects detected.")

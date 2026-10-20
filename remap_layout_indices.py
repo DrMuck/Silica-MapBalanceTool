@@ -34,7 +34,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 RES_DIR = SCRIPT_DIR / "data" / "resources"
-SPAWNS = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\UserData\Spawns")
+SPAWNS = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\UserData\cfg\Spawns")
 STAMP = SPAWNS / ".index_remap_done.json"
 
 # Must exceed any whole-map origin shift (CrimsonPeak moved ~1.4m) while staying
