@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-29 — New map designs
+
+### Changed
+- Map images re-exported from the updated game assets (MapReplay `assets.pak`): new grey line-art style for CrimsonPeak, GreatErg, NarakaCity, NorthPolarCap, TheMaw, Citadel, IndustrialQuarter; Badlands, BlackIsle, CrystalChasm, MonumentValley, RiftBasin, WhisperingPlains unchanged
+- Image sizes and world extents unchanged, so masks, resources and saved layouts still line up
+- `preprocess.py` flattens transparent map PNGs onto the map grey (Citadel is now line art on transparency and came out blank)
+
 ## 2026-08-15 — Measure box
 
 ### Added

@@ -72,7 +72,11 @@ def extract_map_image(map_name):
         pak = AssetPack(str(ASSETS_PAK))
         rel = f"Maps/{map_name}.png"
         if pak.has_asset(rel):
-            img = pak.load_image(rel).convert("RGB")
+            # Some maps (e.g. Citadel since the 1.0.x redesign) are white line
+            # art on transparency; flatten onto the grey of the opaque maps.
+            img = pak.load_image(rel).convert("RGBA")
+            bg = Image.new("RGBA", img.size, (79, 81, 82, 255))
+            img = Image.alpha_composite(bg, img).convert("RGB")
             img.save(str(out_path), "JPEG", quality=90)
             print(f"  [OK] Extracted {map_name}.jpg ({img.size[0]}x{img.size[1]})")
             return True
