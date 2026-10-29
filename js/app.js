@@ -6,6 +6,7 @@ const App = (() => {
   let map = null;
   let currentMap = null;
   let baseLayer = null;
+  let contourLayer = null;
 
   async function init() {
     // Init Leaflet map with Simple CRS (flat coordinate system)
@@ -63,6 +64,7 @@ const App = (() => {
     Placement.clearAll();
     Measure.clear();
     if (baseLayer) map.removeLayer(baseLayer);
+    if (contourLayer) map.removeLayer(contourLayer);
     if (Layers.gridLayer) map.removeLayer(Layers.gridLayer);
     if (Layers.balteriumLayer) map.removeLayer(Layers.balteriumLayer);
     if (Layers.bioticsLayer) map.removeLayer(Layers.bioticsLayer);
@@ -79,6 +81,12 @@ const App = (() => {
     // Base map image (use assetMap for variants)
     baseLayer = L.imageOverlay(`data/maps/${assetMap}.jpg`, bounds).addTo(map);
     map.fitBounds(bounds);
+
+    // Terrain contours (rendered by contours.py; the game draws them at runtime)
+    contourLayer = L.imageOverlay(`data/contours/${assetMap}.png`, bounds);
+    if (document.getElementById('layer-contours').checked) {
+      contourLayer.addTo(map);
+    }
 
     // Grid
     Layers.gridLayer = Layers.createGridLayer(map, extent);
@@ -149,6 +157,7 @@ const App = (() => {
 
   function setupLayerToggles() {
     const toggles = {
+      'layer-contours': () => contourLayer,
       'layer-grid': () => Layers.gridLayer,
       'layer-balterium': () => Layers.balteriumLayer,
       'layer-biotics': () => Layers.bioticsLayer,

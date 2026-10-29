@@ -2,6 +2,9 @@
 
 ## 2026-10-29 — New map designs
 
+### Added
+- **Terrain Contours** layer (on by default): 5 m lines, every 25 m a major line, like the new in-game map. The game draws these at runtime with a shader, so they are rendered here from the client's terrain heightmaps by the new `contours.py` (UnityPy, uses the shader's MAT_MapContourWorld settings) into `data/contours/*.png`
+
 ### Changed
 - Map images re-exported from the updated game assets (MapReplay `assets.pak`): new grey line-art style for CrimsonPeak, GreatErg, NarakaCity, NorthPolarCap, TheMaw, Citadel, IndustrialQuarter; Badlands, BlackIsle, CrystalChasm, MonumentValley, RiftBasin, WhisperingPlains unchanged
 - Image sizes and world extents unchanged, so masks, resources and saved layouts still line up
