@@ -43,8 +43,10 @@ CONTOUR_INTERVAL = 5.0       # metres between lines
 CONTOUR_MAJOR_EVERY = 5      # every 5th line is a major line (25 m)
 CONTOUR_WIDTH = 2.5          # line width in pixels (minor and major)
 CONTOUR_MIN_PIXELS = 5.0     # lines closer than this fade out (cliffs)
-CONTOUR_COLOR = (0.20, 0.19, 0.17, 0.70)
-CONTOUR_MAJOR_COLOR = (0.10, 0.09, 0.08, 0.85)
+# The shader's dark lines (0.20,0.19,0.17 / 0.10,0.09,0.08) vanish on the dark
+# map textures, so the overlay uses MAT_GeneratedMap's light outline colour.
+CONTOUR_COLOR = (0.96, 0.94, 0.88, 0.40)
+CONTOUR_MAJOR_COLOR = (1.00, 0.97, 0.88, 0.85)
 
 # Unity stores heights as int16 in [0, 32766] scaled by m_Scale.y.
 HEIGHT_NORM = 32766.0
