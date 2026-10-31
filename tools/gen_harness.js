@@ -6,6 +6,7 @@
 //   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
 //   node tools/gen_harness.js [--kit N] [--nest M] ...            exact start kits (spec 13) on every run
 //   node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps ..] [--modes ..]
+//   node tools/gen_harness.js --random N [--band lo,hi] [--maps ..] [--modes ..]   random fair search (spec 14)
 //
 // Builds GenRaw from disk (pngjs for masks and heights, Terrain.decode for heights), runs
 // GenContext.build + GenSearch.run for every map x mode, writes <out>/gen_report.md,
@@ -24,6 +25,12 @@
 // one row per map x mode x value (kit: hvh, hva, hvhva; Nest: hva, hvhva; the other setting
 // auto) and write <out>/sweep_report.md / .json; exit 1 on an exception, an empty result without
 // a reason, a kit miscount, ms > 3000 or a determinism miss on the seed-repeat sample.
+//
+// --random N (spec 14.6): one GenRandom.run with N runs per map x mode (band = --band or the
+// map default 0.6-1.4 x d0) and writes <out>/random_report.md / .json; exit 1 on an exception,
+// an empty result without a reason, ms > N x 3000, a determinism miss (first row), a top set
+// that a normal run with its own settings on a fresh ctx does not reproduce, two presented
+// sets not distinct, a pair distance outside the band filter or fair > score.
 'use strict';
 
 const fs = require('fs');
@@ -500,7 +507,7 @@ function writeReport(outDir, rows, extra) {
 function parseArgs(argv) {
   const a = { maps: null, modes: MODES.slice(), seed: 1, out: path.join(__dirname, 'out'),
     determinism: true, seedCheck: true, selftest: true, strict: false, layouts: [],
-    kit: null, nest: null, sweepKit: null, sweepNest: null, sweepDet: 5 };
+    kit: null, nest: null, sweepKit: null, sweepNest: null, sweepDet: 5, random: null, band: null };
   const ints = (k, v) => {
     const out = String(v).split(',').map(s => s.trim()).filter(Boolean).map(Number);
     if (!out.length || out.some(n => !Number.isInteger(n) || n < 0)) throw new Error(`${k} wants whole numbers >= 0, got ${v}`);
@@ -522,11 +529,14 @@ function parseArgs(argv) {
     else if (k === '--sweep-kit') a.sweepKit = ints(k, next());
     else if (k === '--sweep-nest') a.sweepNest = ints(k, next());
     else if (k === '--sweep-det') a.sweepDet = ints(k, next())[0];
+    else if (k === '--random') a.random = ints(k, next())[0];
+    else if (k === '--band') a.band = ints(k, next()).slice(0, 2);
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
         '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M]\n' +
         'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]\n' +
-        'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]');
+        'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]\n' +
+        'node tools/gen_harness.js --random N [--band lo,hi] [--maps A,B] [--modes ..]');
       process.exit(0);
     } else throw new Error(`unknown argument ${k}`);
   }
@@ -741,10 +751,127 @@ async function sweepMode(args) {
   process.exitCode = fatal ? 1 : 0;
 }
 
+// ── --random mode (spec 14.6) ─────────────────────────────────────────────
+
+function randomSettings(E, raw, mode, seed, runs, band) {
+  const R = E.GenRandom;
+  const d0 = Math.max(1300, Math.min(2700, Math.round((0.9 * raw.cfg.extent) / 50) * 50));
+  return E.GenContext.defaultSettings(raw, { mode, seed, random: { runs, band: band || R.defaultBand(d0) } });
+}
+
+async function randomMode(args) {
+  const MAP_CONFIG = loadMapConfig();
+  const maps = args.maps || Object.keys(MAP_CONFIG);
+  for (const m of maps) if (!MAP_CONFIG[m]) throw new Error(`unknown map ${m}`);
+  const E = loadEngine();
+  E.GenRandom = require(path.join(GEN, 'random.js'));
+  const R = E.GenRandom, N = args.random;
+  fs.mkdirSync(args.out, { recursive: true });
+  const rows = [], checks = [];
+  let fatal = false, first = true;
+  const tally = { infeasible: 0, msBad: 0, repro: 0, reproN: 0, distinct: 0, band: 0, fairBad: 0, det: null };
+
+  for (const map of maps) {
+    const raw = loadRaw(map, MAP_CONFIG);
+    for (const mode of args.modes) {
+      process.stdout.write(`${map.padEnd(18)} ${mode.padEnd(6)} `);
+      const row = { map, mode, issues: [] };
+      try {
+        const s = randomSettings(E, raw, mode, args.seed, N, args.band);
+        const prm = R.params(s);
+        row.band = prm.band;
+        const ctx = E.GenContext.build(raw, s);
+        const t0 = process.hrtime.bigint();
+        const res = R.run(ctx, s);
+        row.ms = Number(process.hrtime.bigint() - t0) / 1e6;
+        const cands = res.candidates;
+        row.runsOk = res.stats.runsOk;
+        row.runsInfeasible = res.stats.runsInfeasible;
+        row.reasons = Array.from(new Set(res.runs.filter(r => r.infeasible).map(r => r.infeasible.reason)));
+        row.pool = res.stats.pool;
+        row.presented = cands.length;
+        row.infeasible = res.infeasible || null;
+        if (row.ms > N * 3000) { row.issues.push(`ms ${f0(row.ms)} > ${N * 3000}`); tally.msBad++; }
+        if (!cands.length && !res.infeasible) row.issues.push('empty result without a reason');
+        if (res.infeasible) tally.infeasible++;
+        if (first) {
+          const h1 = sha256(canonical(res));
+          const h2 = sha256(canonical(R.run(E.GenContext.build(raw, s), s)));
+          tally.det = h1 === h2;
+          if (!tally.det) row.issues.push('determinism: re-run differs');
+          first = false;
+        }
+        if (cands.length) {
+          const top = cands[0];
+          row.best = { fair: top.fair, score: top.run.score, d: top.run.enemyDistance, seed: top.run.seed, rank: top.run.rank, gateFails: top.gateFails };
+          const worst = Object.entries(top.terms || {}).sort((a, b) => b[1] - a[1])[0];
+          row.worstTerm = worst ? `${worst[0]} ${f2(worst[1])}` : '-';
+          // reproduction: a normal run with the top set's own settings on a fresh ctx
+          const rs = R.runSettings(s, { enemyDistance: top.run.enemyDistance, seed: top.run.seed });
+          const again = E.GenSearch.run(E.GenContext.build(raw, rs), rs);
+          const m = again.candidates.find(c => c.rank === top.run.rank);
+          tally.reproN++;
+          if (m && m.sig === top.sig && m.score === top.run.score && m.gateFails.join() === top.gateFails.join()) tally.repro++;
+          else row.issues.push(`reproduction: run ${top.run.index} rank ${top.run.rank} ${m ? `sig ${m.sig === top.sig} score ${m.score} vs ${top.run.score}` : 'missing'}`);
+          const dmin = res.stats.distinctness;
+          let nd = 0;
+          for (let i = 0; i < cands.length; i++) for (let j = 0; j < i; j++) if (!E.GenSearch.distinctFrom(cands[j], cands[i], mode, dmin)) nd++;
+          if (nd) { row.issues.push(`${nd} presented pair(s) not distinct at ${dmin} m`); tally.distinct++; }
+          const lo = 0.85 * prm.band[0], hi = 1.15 * prm.band[1];
+          const out = cands.filter(c => R.pairDistances(c.set, mode).some(d => d < lo || d > hi));
+          if (out.length) { row.issues.push(`${out.length} set(s) outside the band filter`); tally.band++; }
+          const fb = cands.filter(c => c.fair > c.run.score + 1e-9);
+          if (fb.length) { row.issues.push(`${fb.length} set(s) with fair > score`); tally.fairBad++; }
+          row.dShown = cands.map(c => c.run.enemyDistance);
+        }
+        if (row.issues.length) fatal = true;
+        console.log(res.infeasible ? `${f0(row.ms)} ms  infeasible: ${res.infeasible.reason}`
+          : `${f0(row.ms)} ms  runs ${row.runsOk}/${N}  pool ${row.pool}  shown ${row.presented}  best fair ${f2(row.best && row.best.fair)} @ d* ${row.best ? row.best.d : '-'}` +
+          (row.issues.length ? `  ISSUES ${row.issues.join('; ')}` : ''));
+      } catch (e) {
+        row.error = e.message;
+        row.issues.push(`error ${e.message}`);
+        fatal = true;
+        console.log(`ERROR ${e.stack}`);
+      }
+      rows.push(row);
+    }
+  }
+
+  const ok = rows.filter(r => !r.error);
+  checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${tally.infeasible} infeasible), runs per row ${N}`);
+  checks.push(`ms <= N x 3000 (${N * 3000}): ${ok.length - tally.msBad}/${ok.length}; max ${f0(Math.max(0, ...ok.map(r => r.ms || 0)))} ms`);
+  checks.push(`determinism (first row, fresh ctx): ${tally.det === null ? '-' : tally.det ? 'ok' : 'FAIL'}`);
+  checks.push(`reproduction of the top set by a normal run on a fresh ctx: ${tally.repro}/${tally.reproN}`);
+  checks.push(`presented sets pairwise distinct: ${ok.length - tally.distinct}/${ok.length} rows; band filter: ${ok.length - tally.band}/${ok.length}; fair <= score: ${ok.length - tally.fairBad}/${ok.length}`);
+  const passing = ok.filter(r => r.best && !r.best.gateFails.length);
+  checks.push(`top set passes every gate: ${passing.length}/${ok.length}`);
+
+  const L = ['# Random fair search report (spec 14.6)', '',
+    `Generated ${new Date().toISOString()} | search seed ${args.seed} | ${N} runs per row | band ${args.band ? args.band.join('-') + ' m' : 'map default 0.6-1.4 x d0'}`, '',
+    '## Checks', '', ...checks.map(c => `- ${c}`), '',
+    '## Rows', '',
+    '| map | mode | band | ms | runs ok | infeasible | pool | shown | best fair | its score | d* | seed #rank | gates | worst term | d* of shown | issues |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
+  for (const r of rows) {
+    const b = r.best || {};
+    L.push(`| ${r.map} | ${r.mode} | ${r.band ? r.band.join('-') : '-'} | ${f0(r.ms)} | ${r.runsOk ?? '-'} | ${r.runsInfeasible ?? '-'}${r.reasons && r.reasons.length ? ' ' + r.reasons.join(',') : ''} | ` +
+      `${r.pool ?? '-'} | ${r.presented ?? '-'} | ${f2(b.fair)} | ${f2(b.score)} | ${b.d ?? '-'} | ${b.seed ?? '-'} #${b.rank ?? '-'} | ${b.gateFails ? (b.gateFails.join(',') || 'ok') : '-'} | ` +
+      `${r.worstTerm || '-'} | ${r.dShown ? r.dShown.join(',') : '-'} | ${cell(r.issues.join('; ') || '-')} |`);
+  }
+  fs.writeFileSync(path.join(args.out, 'random_report.md'), L.join('\n'));
+  fs.writeFileSync(path.join(args.out, 'random_report.json'), JSON.stringify({ seed: args.seed, runs: N, checks, rows }, null, 1));
+  console.log('');
+  for (const c of checks) console.log(c);
+  console.log(`\nreport: ${path.join(args.out, 'random_report.md')}`);
+  process.exitCode = fatal ? 1 : 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.layouts.length) return layoutMode(args);
   if (args.sweepKit || args.sweepNest) return sweepMode(args);
+  if (args.random) return randomMode(args);
   const exact = args.kit != null || args.nest != null ? { kit: args.kit, nest: args.nest } : null;
   const MAP_CONFIG = loadMapConfig();
   const maps = args.maps || Object.keys(MAP_CONFIG);

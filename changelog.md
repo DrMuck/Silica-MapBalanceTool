@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-01 — Spawn Generator: random fair search
+
+### Added
+- **Random fair search** checkbox in the Spawn Generator: several runs (default 12) over a band of enemy start distances (default 0.6-1.4 x the map's default distance) with random seeds; the fairest distinct sets of all runs are shown
+  - Fixed: mode, radii, Balterium / Biotics totals, starting kits, weights and exposure settings; only the distance and the seed vary
+  - Ranked by the **fair score** = score without the part of T1 that measures closeness to the set distance (that part means nothing once the distance varies); the 3-way distance balance stays in
+  - Each row shows the run it came from (`d* 2100 m · seed … · run 4/12 #2 · score …`); Apply / Download write the normal layout of that run, so the file name and `_meta` match a normal Generate with that distance and seed, plus `_meta.generator.random`
+  - Same Seed field = search seed: the same seed and settings give the same results
+- `tools/gen_harness.js --random N [--band lo,hi]`: one search per map x mode, checks timing, determinism, that a normal run reproduces the top set, distinctness, band and fair <= score; writes `random_report.md`
+
 ## 2026-10-31 — Spawn Generator: resource summary per result
 
 ### Added

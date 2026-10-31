@@ -709,3 +709,114 @@ Owns: `js/gen/candidates.js`, `js/gen/patches.js`, `js/gen/metrics.js` (G3), `js
 the DOM), `js/generator_ui.js`, `index.html`, `tools/gen_harness.js` (`--kit`, `--nest`,
 `--sweep-kit`, `--sweep-nest`, report-only gap when exact). Verify: 13.8. Doc: none (this
 section is the spec); report the sweep table in the task report.
+
+## 14. Random fair search (round 5)
+
+User request: "a random fair spawns feature that searches for fair spawns via parameter
+variations; maybe only the total amount of Balterium/Biotics is fixed." Standing guidance:
+simple, no overfitting, no contested-zone complexity.
+
+### 14.1 What varies, what stays
+
+Only two things vary: the **enemy start distance** `d*` and the **run seed**. Everything else is
+the user's setting of the normal Generate: mode (a layout serves one mode), radii (game rules),
+counts (the user's own fixing), weights / exposure weight / cut / control model (the scoring
+model; varying it makes scores incomparable = overfitting), kits (exact stays exact, auto stays
+auto). Reason: `d*` is the only generator **target** that shapes a layout without being a rule
+or a scoring preference; the seed moves the thinning, shortlist and refinement tie-breaks.
+Settings: `random: { runs: 12, band: [dLo, dHi] }`, `dLo/dHi` in 800-5000, `dLo ≤ dHi`,
+default `[round50(0.6·d0), round50(1.4·d0)]` clamped to 800-5000, `d0` = the map's default
+distance (section 7); reset on map change like `gen-dist`. `runs` 2-60.
+
+### 14.2 Plan: stratified draw, one search seed
+
+One `mulberry32(settings.seed)` stream (the normal Seed field is the **search seed**; Reseed
+works as before): for i = 0..runs−1, `d*_i = round50(dLo + (dHi − dLo)·(i + u_i)/runs)`,
+`u_i = rng()`, `seed_i = floor(rng()·2^31)`. Distances cover the band evenly, seeds are
+random. Run i = `GenSearch.run(ctx, {...settings, enemyDistance: d*_i, seed: seed_i})` on the
+**same ctx** (caches are keyed by radius / exposure weights, which are fixed; `ctx.stats` is
+per run) with the per-run `topN` unchanged (5). Determinism: equal search seed, inputs and
+settings → byte-identical pooled result; **and** a normal Generate with `(d*_i, seed_i)` on a
+fresh ctx returns the same set at the same in-run rank with the same score (14.6 checks it).
+
+### 14.3 Fairness ranking across runs
+
+`score` is not comparable across `d*`: T1's first part `Σ|d − d*|/(0.15·d*)` measures closeness
+to the run's own target, not fairness. Pooled key = **fair score**
+`F = score − w_T1 · t1dist`, `t1dist = GenMetrics.t1Of(ds, d*_i, false)` over the set's enemy
+pair distances (`metrics.distances`); the hvhva `CV(d)/0.10` part stays in F (it is fairness).
+T2, T3, T4, T6 are distance-free and stay as they are. The band is the only distance guard:
+pool filter `0.85·dLo ≤ d ≤ 1.15·dHi` for every enemy pair (G2 gives the lower side per run).
+Order: (failed gates, F, sig) like `better()`; exact-mode exclusions are already per run.
+
+### 14.4 Pool and presentation
+
+- Pool = union of every run's presented candidates (≤ 5 each) minus the band filter; runs that
+  come back `infeasible` are skipped and counted; all infeasible → pooled `infeasible` with the
+  most frequent reason, detail "all N runs: …".
+- Present the user's `topN` best by (failed gates, F) with the normal distinctness filter
+  (`GenSearch.distinctFrom`, same `dmin`) **across runs**, so the same corner pair found at two
+  distances shows once. Gate-failing sets only when nothing passes (as today, flagged rows).
+- Row = the normal row plus one line `d* 2100 m · seed 1734 · run 4/12 #2 · score 1.83` (the
+  run's own settings and in-run rank; F replaces `score` in the row head as `fair F`).
+  Status: `N set(s) from 12 runs (1 infeasible: no_set) in 9.4 s · pool 57`.
+- **Apply / Download build a normal layout**: `GenLayout.build(ctx, runSettings_i, ev, inRunRank,
+  …)` with `runSettings_i = {...settings, enemyDistance: d*_i, seed: seed_i}` and
+  `extra.stats = run_i.stats`; so `_meta.generator.settings/seed/rank`, `description` and the
+  file name (`<Map>_<mode>_gen_<d*_i>m_<B>bal_<O>bio_s<seed_i>-<inRunRank>.json`) are exactly
+  what a normal Generate with those values writes. Added:
+  `_meta.generator.random = { searchSeed, runs, band, runIndex, poolRank, fair }`; layout VERSION 1.2.0.
+
+### 14.5 Interfaces
+
+```
+js/gen/random.js (GenRandom, UMD, DOM-free, uses GenRng, GenSearch, GenMetrics):
+  plan(settings) → [{index, enemyDistance, seed}]                       // 14.2, pure
+  runSettings(settings, p) → GenSettings            // base + d*/seed, random: null (hash = normal run)
+  fair(ev, dstar, settings) → number                                    // 14.3
+  run(ctx, settings, onProgress, shouldStop) → RandomResult:
+    { version, kind: 'random', settings /* base */, searchSeed, plan, infeasible?,
+      runs: [{index, enemyDistance, seed, ms, nResults, infeasible, stats}],
+      candidates: [{...candidate /* as GenResult */, fair, run: {index, enemyDistance, seed, rank, score}}],
+      stats: {ms, pool, runsOk, runsInfeasible, distinctness, kitRange /* of the last ok run */} }
+  progress: frac = (i + fracRun)/runs, text 'run i/N · d* 2100 m: stage 2 …'; shouldStop goes
+  into every GenSearch.run and is checked between runs (cancel error as today).
+worker.js: same 'run' message; GenRandom.run when settings.random is set, else GenSearch.run.
+context.js defaultSettings / browser_adapter makeSettings: random: null | {runs, band}.
+generator_ui.js: checkbox gen-random "Random fair search", gen-random-runs (12), gen-random-dlo /
+  gen-random-dhi (m); on → gen-dist disabled; renderResults branches on result.kind; buildLayout
+  uses GenRandom.runSettings + extra.random.
+```
+
+### 14.6 Acceptance (harness, `tools/gen_harness.js --random N [--band lo,hi]`)
+
+One row per map × mode (`--maps`, `--modes` as before), 13 × 3 default, N = 8 in CI:
+- `ms ≤ N · 3000`; no exception; an empty result only with `infeasible.reason` + detail.
+- Determinism: the first row re-run with the same search seed → identical SHA-256.
+- Reproduction: for the top pooled set, a normal `GenSearch.run` with `runSettings_i` on a
+  **fresh** ctx contains the same `sig` at `run.rank` with the same `score` and `gateFails`
+  (39/39 rows).
+- Presented sets pairwise `distinctFrom` at the row's `dmin`; every pair distance inside the
+  band filter; `fair ≤ score` per set and `fair === score` when every pair is at `d*` exactly.
+- Normal Generate (no `random`) stays byte-identical to the round-4 output on 39/39 rows.
+- Report `random_report.md`: per row runs ok/infeasible, pool, presented, best `fair` + its
+  `d*`/seed, worst term of the best set; one summary line.
+
+### 14.7 Task (one executor)
+
+Owns: new `js/gen/random.js`, `js/gen/worker.js`, `js/gen/context.js`, `js/gen/layout.js`
+(`_meta.generator.random`, VERSION), `js/gen/browser_adapter.js`, `js/generator_ui.js`,
+`index.html` (+ script tag for random.js in the page and `importScripts` in the worker),
+`js/gen/model_selftest.js` (plan determinism + fair formula fixture), `tools/gen_harness.js`.
+No change to `search.js`, `metrics.js`, `patches.js`, `candidates.js`. Verify: 14.6. Doc: none.
+
+### 14.8 Outcome (implemented 2026-11-01)
+
+`js/gen/random.js` as specified, with one deviation: `random` is **absent** (not `null`) when
+off, in `browser_adapter.makeSettings` and `GenRandom.runSettings`, and `context.js` is
+unchanged, so a normal run's settings hash and result stay byte-identical (search, metrics,
+context, candidates, patches, grid untouched). The selftest is `GenRandom.selftest()` (suite
+`random_selftest (14)`, 10/10) instead of an entry in `model_selftest.js`. Harness
+`--random 8`, 13 maps x 3 modes: 39/39 rows, 0 infeasible, max 10.0 s (Badlands hvhva),
+determinism ok, reproduction 39/39, distinct / band / fair <= score 39/39, top set passes every
+gate 39/39. UI check in headless Chrome: run, rows, preview, Apply, Download name, plain Generate.

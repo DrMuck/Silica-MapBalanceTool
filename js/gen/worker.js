@@ -1,14 +1,15 @@
 // Spawn generator Web Worker (docs/SPAWN_GENERATOR.md section 8.2 protocol):
 //   in:  {type: 'run', raw: GenRaw, settings: GenSettings}   |   {type: 'cancel'}
+//        (settings.random set: GenRandom.run, result = RandomResult, spec 14.5)
 //   out: {type: 'progress', frac, text}*  then  {type: 'done', result: GenResult}
 //        or {type: 'error', message}  (a cancelled run posts {type: 'error', message: 'cancelled', cancelled: true})
 // The search runs synchronously, so a 'cancel' message is only seen between runs; the page
 // cancels a running job with worker.terminate(). Paths are relative to this file (js/gen/).
-/* global importScripts, GenContext, GenSearch */
+/* global importScripts, GenContext, GenSearch, GenRandom */
 'use strict';
 
 importScripts('../terrain.js', 'rng.js', 'grid.js', 'expansion.js', 'context.js', 'candidates.js', 'patches.js',
-  'metrics.js', 'search.js', 'layout.js');
+  'metrics.js', 'search.js', 'random.js', 'layout.js');
 
 let cancelRequested = false;
 
@@ -20,7 +21,9 @@ self.onmessage = function (e) {
   try {
     const ctx = GenContext.build(msg.raw, msg.settings);
     let last = -1;
-    const result = GenSearch.run(ctx, msg.settings, (frac, text) => {
+    // spec 14.5: settings.random set = the random fair search over several runs
+    const engine = msg.settings && msg.settings.random ? GenRandom : GenSearch;
+    const result = engine.run(ctx, msg.settings, (frac, text) => {
       // throttle to whole percent steps
       const p = Math.floor(frac * 100);
       if (p === last && frac < 1) return;

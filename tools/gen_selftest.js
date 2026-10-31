@@ -121,6 +121,17 @@ async function runAll(opts) {
     suites.push(suite('metrics_selftest (T3)', [{ name: 'load', ok: false, detail: e.stack }]));
   }
 
+  // round 5: random fair search (spec 14)
+  const randomFile = path.join(H.GEN, 'random.js');
+  if (fs.existsSync(randomFile)) {
+    try {
+      const R = require(randomFile);
+      suites.push(suite('random_selftest (14)', normalize('GenRandom.selftest', R.selftest())));
+    } catch (e) {
+      suites.push(suite('random_selftest (14)', [{ name: 'load', ok: false, detail: e.stack }]));
+    }
+  }
+
   const ok = suites.every(s => s.ok);
   if (!opts.quiet) {
     for (const s of suites) {

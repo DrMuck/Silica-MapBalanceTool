@@ -231,6 +231,18 @@
           <span>Enemy distance</span>
           <span class="gen-inline"><input type="number" class="gen-num" id="gen-dist" value="2700" min="800" max="5000" step="50"> m</span>
         </div>
+        <div class="setting-row" title="Several runs over a band of enemy distances with random seeds; the fairest distinct sets of all runs are shown. Mode, radii, patch totals, kits and weights stay as set.">
+          <label class="gen-inline"><input type="checkbox" id="gen-random"> Random fair search</label>
+        </div>
+        <div class="setting-row gen-random-opt" style="display:none;">
+          <span>Runs</span>
+          <input type="number" class="gen-num" id="gen-random-runs" value="12" min="2" max="60" step="1">
+        </div>
+        <div class="setting-row gen-random-opt" style="display:none;" title="Enemy distances the runs spread over (default 0.6-1.4 x the map's default distance)">
+          <span>Distance band</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-random-dlo" value="1600" min="800" max="5000" step="50"> -
+            <input type="number" class="gen-num" id="gen-random-dhi" value="3800" min="800" max="5000" step="50"> m</span>
+        </div>
         <div class="setting-row">
           <span>Refinery radius</span>
           <span class="gen-inline"><input type="number" class="gen-num" id="gen-r-build" value="1000" min="100" max="5000" step="10"> m</span>
@@ -289,7 +301,7 @@
         </div>
         <progress id="gen-progress" max="1" value="0"></progress>
         <div id="gen-status" class="gen-status"></div>
-        <div class="gen-status" id="gen-legend" title="Spawn Generator result rows">s = T2 share of each side's own resource type (S/C/A, hva H/A) &middot; gap = largest blank radius B/O &middot; V = expansion curve, Balterium grabbed by the best 1/2/3 expansion HQs per human (S/C, hva H) &middot; yellow: score above 3.0, geometry limits fairness on this map</div>
+        <div class="gen-status" id="gen-legend" title="Spawn Generator result rows">s = T2 share of each side's own resource type (S/C/A, hva H/A) &middot; gap = largest blank radius B/O &middot; V = expansion curve, Balterium grabbed by the best 1/2/3 expansion HQs per human (S/C, hva H) &middot; random search: fair = score without the distance-target part of T1, ranked across runs &middot; yellow: score above 3.0, geometry limits fairness on this map</div>
         <div id="gen-results"></div>
       </div>
 
@@ -316,6 +328,7 @@
   <script src="js/gen/patches.js"></script>
   <script src="js/gen/metrics.js"></script>
   <script src="js/gen/search.js"></script>
+  <script src="js/gen/random.js"></script>
   <script src="js/gen/layout.js"></script>
   <script src="js/gen/browser_adapter.js"></script>
   <script src="js/layers.js"></script>

@@ -10,7 +10,7 @@
   'use strict';
 
   const Rng = () => RngMod || root.GenRng;
-  const VERSION = '1.1.0';   // 1.1.0: G5 / T6 expansion layer (spec 12), _meta.generator.expansion
+  const VERSION = '1.2.0';   // 1.1.0: G5 / T6 expansion layer (spec 12), _meta.generator.expansion; 1.2.0: _meta.generator.random (spec 14.4)
   const MODES = ['hvh', 'hva', 'hvhva'];
   const DEFAULT_AMOUNTS = { balterium: 40000, biotics: 42000 };
   // alien chain ranges are not generator settings; the tool's slider defaults
@@ -57,7 +57,8 @@
   /**
    * build(ctx, settings, evaluation, rank, amounts, extra?) -> layout JSON.
    * amounts = {balterium, biotics} (the tool's global sliders; default 40000 / 42000).
-   * extra = {stats, generated} (optional: GenResult.stats, ISO timestamp; default now).
+   * extra = {stats, generated, random} (optional: GenResult.stats, ISO timestamp; default now;
+   * random = {searchSeed, runs, band, runIndex, poolRank, fair} for a random fair search result).
    */
   function build(ctx, settings, evaluation, rank, amounts, extra) {
     const mode = settings.mode;
@@ -111,6 +112,7 @@
           metrics: evaluation.metrics || {},
           expansion: expansionMeta(settings, evaluation.metrics),
           stats: ex.stats || null,
+          ...(ex.random ? { random: ex.random } : {}),
         },
       },
     };

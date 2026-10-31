@@ -62,7 +62,7 @@
 
   /**
    * values: the UI's plain values {mode, seed, enemyDistance, radii, counts, exposureWeight,
-   * weights, exposureCut, controlModel, topN, kitExact, nestKitExact}; anything missing keeps the
+   * weights, exposureCut, controlModel, topN, kitExact, nestKitExact, random}; anything missing keeps the
    * spec default. kitExact / nestKitExact: null = auto, a number is passed on unchanged (the
    * engine reports a value that is not a whole number >= 0 as infeasible, spec 13.5).
    */
@@ -81,6 +81,8 @@
     if (Number.isFinite(v.topN)) s.topN = v.topN;
     if (typeof v.kitExact === 'number') s.kitExact = v.kitExact;
     if (typeof v.nestKitExact === 'number') s.nestKitExact = v.nestKitExact;
+    // spec 14.1: random fair search; absent (not null) when off, so a normal run's hash is unchanged
+    if (v.random) s.random = { runs: v.random.runs, band: v.random.band.slice() };
     return s;
   }
 

@@ -75,6 +75,12 @@ const GeneratorUI = (() => {
     expSlider.addEventListener('input', () => {
       $('val-gen-w-exposure').textContent = parseFloat(expSlider.value).toFixed(1);
     });
+    // spec 14.1: the random search varies d* over the band, so the single distance is unused
+    $('gen-random').addEventListener('change', () => {
+      const on = $('gen-random').checked;
+      $('gen-dist').disabled = on;
+      document.querySelectorAll('.gen-random-opt').forEach(el => { el.style.display = on ? '' : 'none'; });
+    });
     $('gen-run').addEventListener('click', () => { startRun(); });
     $('gen-cancel').addEventListener('click', () => { cancelRun('cancelled'); });
     $('layer-territory').addEventListener('change', (e) => {
@@ -112,7 +118,11 @@ const GeneratorUI = (() => {
       countsMap = mapName;
       $('gen-n-balt').value = Math.round(0.75 * vanilla.Balterium);
       $('gen-n-bio').value = Math.round(0.75 * vanilla.Biotics);
-      $('gen-dist').value = GenAdapter.defaultDistance(MAP_CONFIG[mapName]);
+      const d0 = GenAdapter.defaultDistance(MAP_CONFIG[mapName]);
+      $('gen-dist').value = d0;
+      const band = GenRandom.defaultBand(d0);
+      $('gen-random-dlo').value = band[0];
+      $('gen-random-dhi').value = band[1];
     }
   }
 
@@ -162,6 +172,10 @@ const GeneratorUI = (() => {
       topN: Math.max(1, Math.round(num('gen-adv-topn', 5))),
       kitExact: exactKit('gen-adv-kit'),
       nestKitExact: exactKit('gen-adv-nestkit'),
+      random: $('gen-random').checked ? {
+        runs: Math.max(2, Math.min(60, Math.round(num('gen-random-runs', 12)))),
+        band: [num('gen-random-dlo', 1600), num('gen-random-dhi', 3800)],
+      } : null,
     });
   }
 
@@ -378,8 +392,17 @@ const GeneratorUI = (() => {
     const prevNest = $('gen-adv-nestkit-max').textContent;
     showKitRange(st.kitRange);
     if (!(st.kitRange && Number.isFinite(st.kitRange.alienMax)) && settings.mode === 'hvh') $('gen-adv-nestkit-max').textContent = prevNest;
-    setStatus(`${cands.length} set(s) in ${Math.round(ms)} ms · candidates ${c.human ?? '?'}h/${c.alien ?? '?'}a · ` +
-      `stage 1 ${st.stage1Sets ?? '?'} · stage 2 ${st.stage2Sets ?? '?'}`);
+    const isRandom = result && result.kind === 'random';
+    if (isRandom) {
+      const inf = (result.runs || []).filter(r => r.infeasible);
+      const why = Array.from(new Set(inf.map(r => r.infeasible.reason))).join(', ');
+      setStatus(`${cands.length} set(s) from ${(result.runs || []).length} runs` +
+        (inf.length ? ` (${inf.length} infeasible: ${why})` : '') +
+        ` in ${(ms / 1000).toFixed(1)} s · pool ${st.pool ?? '?'}`);
+    } else {
+      setStatus(`${cands.length} set(s) in ${Math.round(ms)} ms · candidates ${c.human ?? '?'}h/${c.alien ?? '?'}a · ` +
+        `stage 1 ${st.stage1Sets ?? '?'} · stage 2 ${st.stage2Sets ?? '?'}`);
+    }
     // spec 13.5 / 13.7: an infeasible request is a named result, not an error
     if (result && result.infeasible) {
       setStatus(`infeasible: ${result.infeasible.reason}: ${result.infeasible.detail}`, true);
@@ -416,9 +439,16 @@ const GeneratorUI = (() => {
           `<span class="gen-term-val">${fmt(v)}</span></div>`;
       }).join('');
 
+      const head = isRandom && ev.run
+        ? `<span class="gen-score" title="score without the distance-target part of T1 (comparable across runs)">fair ${fmt(ev.fair)}</span>`
+        : `<span class="gen-score">score ${fmt(ev.score)}</span>`;
+      const runLine = isRandom && ev.run
+        ? `<div class="gen-row-sub">d* ${ev.run.enemyDistance} m · seed ${ev.run.seed} · run ${ev.run.index + 1}/${result.runs.length} #${ev.run.rank} · score ${fmt(ev.run.score)}</div>`
+        : '';
       row.innerHTML =
-        `<div class="gen-row-head"><b>#${ev.rank || i + 1}</b><span class="gen-score">score ${fmt(ev.score)}</span>` +
+        `<div class="gen-row-head"><b>#${ev.rank || i + 1}</b>${head}` +
         `<span class="gen-gates">${gateHtml}</span></div>` +
+        runLine +
         `<div class="gen-row-sub gen-row-res">${resourceLine(ev, settings.mode)}</div>` +
         `<div class="gen-row-sub">${sharesGapLine(ev, settings.mode)}</div>` +
         `<div class="gen-row-sub gen-row-exp">${expansionLine(ev, settings.mode)}</div>` +
@@ -598,8 +628,20 @@ const GeneratorUI = (() => {
 
   // ── apply / download ───────────────────────────────────────────────────
 
+  /**
+   * A random search result is written as the normal layout of its own run (spec 14.4): the run's
+   * settings, in-run rank and stats, plus _meta.generator.random.
+   */
   function buildLayout(i) {
     const ev = run.result.candidates[i];
+    if (run.result.kind === 'random' && ev.run) {
+      const r = run.result, p = { enemyDistance: ev.run.enemyDistance, seed: ev.run.seed };
+      const prm = GenRandom.params(r.settings);
+      return GenAdapter.layout(run.mapName, GenRandom.runSettings(r.settings, p), ev, ev.run.rank, Layers.getResourceAmounts(), {
+        stats: r.runs[ev.run.index].stats,
+        random: { searchSeed: r.searchSeed, runs: prm.runs, band: prm.band, runIndex: ev.run.index, poolRank: ev.rank || i + 1, fair: Math.round(ev.fair * 1000) / 1000 },
+      });
+    }
     return GenAdapter.layout(run.mapName, run.settings, ev, ev.rank || i + 1, Layers.getResourceAmounts(),
       { stats: run.result.stats });
   }
@@ -616,7 +658,8 @@ const GeneratorUI = (() => {
     clearPreview();
     try {
       await UI.importLayout(layout);
-      setStatus(`Applied #${i + 1} (${run.settings.mode}, seed ${run.settings.seed}).`);
+      const g = layout._meta.generator;
+      setStatus(`Applied #${i + 1} (${run.settings.mode}, seed ${g.seed}${g.random ? `, d* ${g.settings.enemyDistance} m` : ''}).`);
     } catch (err) {
       setStatus(`Error: ${err.message}`, true);
       console.error('Generator: apply failed', err);
