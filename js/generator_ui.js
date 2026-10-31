@@ -82,6 +82,11 @@ const GeneratorUI = (() => {
       if (e.target.checked) territoryOverlay.addTo(map);
       else map.removeLayer(territoryOverlay);
     });
+    // the resource lines use the global amount sliders (the amounts a downloaded layout carries)
+    for (const id of ['setting-balt-amount', 'setting-bio-amount']) {
+      const el = $(id);
+      if (el) el.addEventListener('input', updateResourceLines);
+    }
   }
 
   /** Called by App.loadMap before anything is cleared. */
@@ -320,6 +325,47 @@ const GeneratorUI = (() => {
     return `<span title="${title}">${svg}V ${vals}${ratio}</span>`;
   }
 
+  function fmtAmount(v) {
+    if (v >= 1e6) return `${(v / 1e6).toFixed(v % 1e6 ? 2 : 0)}M`;
+    if (v >= 1e3) return `${(v / 1e3).toFixed(v % 1e3 ? 1 : 0)}K`;
+    return `${v}`;
+  }
+
+  /**
+   * Kept patches and resource on the whole map, and inside each starting circle (Balterium
+   * within the refinery radius per human, Biotics within the Nest radius). Every kept patch
+   * holds the global slider amount (generated layouts carry no patch_overrides).
+   */
+  function resourceLine(ev, mode) {
+    const am = Layers.getResourceAmounts();
+    const per = { Balterium: am.balterium, Biotics: am.biotics };
+    const kept = (ev.plan && ev.plan.kept) || {};
+    const nB = (kept.Balterium || []).length, nO = (kept.Biotics || []).length;
+    const onMap = `Map: Balt ${nB} <b>${fmtAmount(nB * per.Balterium)}</b>` +
+      ` · Bio ${nO} <b>${fmtAmount(nO * per.Biotics)}</b>`;
+    const kit = (ev.metrics || {}).kit || {};
+    const roles = rolesOf(kit).filter(r => !(mode === 'hva' && r === 'Cent'));   // hva: Sol === Cent
+    const start = roles.map(r => {
+      const type = r === 'Alien' ? 'Biotics' : 'Balterium';
+      const lab = mode === 'hva' && r === 'Sol' ? 'H' : r[0];
+      return `${lab} ${kit[r]} ${type === 'Balterium' ? 'Balt' : 'Bio'} ${fmtAmount(kit[r] * per[type])}`;
+    }).join(' · ');
+    const title = `Patch count and resource total (every kept patch holds the global slider amount: ` +
+      `Balterium ${fmtAmount(per.Balterium)}, Biotics ${fmtAmount(per.Biotics)}). Start = inside the starting circle: ` +
+      'Balterium within the refinery radius per human, Biotics within the Nest radius';
+    return `<span title="${title}">${onMap}${start ? `<br>Start: ${start}` : ''}</span>`;
+  }
+
+  function updateResourceLines() {
+    if (!run || !run.result) return;
+    const cands = run.result.candidates || [];
+    document.querySelectorAll('#gen-results .gen-row').forEach(row => {
+      const ev = cands[parseInt(row.dataset.idx)];
+      const el = row.querySelector('.gen-row-res');
+      if (ev && el) el.innerHTML = resourceLine(ev, run.settings.mode);
+    });
+  }
+
   function renderResults(wallMs) {
     const box = $('gen-results');
     box.innerHTML = '';
@@ -373,6 +419,7 @@ const GeneratorUI = (() => {
       row.innerHTML =
         `<div class="gen-row-head"><b>#${ev.rank || i + 1}</b><span class="gen-score">score ${fmt(ev.score)}</span>` +
         `<span class="gen-gates">${gateHtml}</span></div>` +
+        `<div class="gen-row-sub gen-row-res">${resourceLine(ev, settings.mode)}</div>` +
         `<div class="gen-row-sub">${sharesGapLine(ev, settings.mode)}</div>` +
         `<div class="gen-row-sub gen-row-exp">${expansionLine(ev, settings.mode)}</div>` +
         (above && !fails.length ? `<div class="gen-row-warntext">${BAR_WARNING}</div>` : '') +

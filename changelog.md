@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — Spawn Generator: resource summary per result
+
+### Added
+- Each result row shows the kept Balterium / Biotics on the map (patch count and total) and inside each starting circle (Balterium within the refinery radius per human, Biotics within the Nest radius); totals follow the global amount sliders live
+
 ## 2026-10-31 — Spawn Generator: exact starting kits
 
 The previous version (expansion layer fairness) is kept on the `old-v2` branch, the first generator on `old`.
