@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-31 — Spawn Generator: expansion layer fairness
+
+The previous generator version is kept on the `old` branch.
+
+### Added
+- **Expansion curve** per human side: Balterium on its own side (outside the starting radius) that the best 1, 2 and 3 expansion HQs can grab, on valid HQ spots within 0.85 × chain range of the start. Covers both patch density (first HQ) and expansion room (three HQs)
+  - New hard rule G5: first expansion HQ within 1 patch between the sides, three HQs within 2
+  - New score T6 over the whole curve, weights 0.45 / 0.35 / 0.20 (share of top commanders who build at least 1 / 2 / 3 first-hop HQs, from replays)
+  - Result rows show the Sol / Cent curve; `_meta.generator.expansion` in the layout JSON
+- `tools/gen_harness.js --layout <file>` scores any layout JSON (e.g. a hand-made one) with the generator's gates and terms
+
+### Changed
+- Patch selection stops adding Balterium to a side's expansion layer once it is 2 patches ahead
+- Territory share (T2) and territory balance (T3) default weight 0.5; the old expansion-ring term (T5) is removed
+- Gate chips that do not apply to the mode are hidden (no G5 in HvA)
+
 ## 2026-10-31 — Spawn Generator
 
 ### Added

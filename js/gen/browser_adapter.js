@@ -29,7 +29,9 @@
       enemyDistance: 2700,
       counts: { balterium: 0, biotics: 0 },
       minKit: 3, minKitAlien: 4, kitCap: null,
-      weights: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1 },
+      // same as GenContext.defaultSettings (spec 12.2 / 12.5)
+      weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 },
+      expansion: { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] },
       exposure: { overlook: 0.5, highground: 0.3, openness: 0.2, weight: 1.0 },
       exposureCut: 0.75,
       controlModel: 'geodesic', slopeCost: { k: 1.0, s0: 0.25, sMax: 0.7 },

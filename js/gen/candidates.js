@@ -1,5 +1,5 @@
 // Candidate start positions for the spawn generator (spec 3.1 G1, 6.1). UMD, DOM-free.
-// Depends on Terrain and GenGrid (looked up on the global at call time in the browser).
+// Depends on Terrain, GenGrid and GenExpansion (looked up on the global at call time in the browser).
 //
 // list(): valid cells (G1) -> one representative per 120 m bin (a seeded random valid cell of
 // the bin; deterministic centre-most cell without rng) -> exposure cut at the
@@ -7,14 +7,18 @@
 // nBalt(R_b) - 2E (human) / nBio(R_n) - 2E (alien), ties by the seeded rng -> greedy thinning
 // to >= min(300 m, extent/10) (300 m on 6 km maps, 150 m on 3 km, 100 m on BlackIsle; at a flat
 // 300 m the 2-3 km maps get only 13-39 candidates) -> cap 250.
+// Human candidates carry v1solo = GenExpansion.solo (spec 12.2: best single expansion cell,
+// enemies ignored, vanilla Balterium), the stage-1 expansion proxy.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('../terrain.js'), require('./grid.js'));
-  else root.GenCandidates = factory(null, null, root);
-}(typeof self !== 'undefined' ? self : this, function (TerrainMod, GenGridMod, root) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory(require('../terrain.js'), require('./grid.js'), root, require('./expansion.js'));
+  } else root.GenCandidates = factory(null, null, root, null);
+}(typeof self !== 'undefined' ? self : this, function (TerrainMod, GenGridMod, root, ExpMod) {
   'use strict';
 
   const T = () => TerrainMod || root.Terrain;
   const G = () => GenGridMod || root.GenGrid;
+  const X = () => ExpMod || root.GenExpansion;
 
   const HUMAN_FOOTPRINT = 67;   // circumscribed HQ footprint radius (m)
 
@@ -102,13 +106,15 @@
       if (P[k].type === 'Biotics' && d <= Rn) nBio++;
       if (P[k].type === own && d > R0 && d <= R0 + Rc) ring1++;
     }
-    return {
+    const cand = {
       id: id !== undefined ? id : `${role === 'alien' ? 'a' : 'h'}${px}_${py}`,
       role, x, z, px, py, ci: G().cellOf(ctx, x, z),
       E: exposure(ctx, settings, px, py),
       z0: ctx.heights ? ctx.heights[py * sc.w + px] : 0,
       nBalt, nBio, ring1, pd,
     };
+    if (role !== 'alien') cand.v1solo = X().solo(ctx, settings, cand);
+    return cand;
   }
 
   function countWithin(ctx, type, x, z, R) {

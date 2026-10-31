@@ -32,7 +32,7 @@
   /**
    * Builds ctx.ctrl = {n, cell, minX, maxZ, h, playable, patchDist, ...extras} and returns it.
    * Extras: playableIdx (Int32Array of playable ci), nPlayable, patchCell (Int32Array, ci of
-   * patch k), cx/cz (Float32Array cell-centre coordinates).
+   * patch k), cx/cz (Float32Array cell-centre coordinates), hqOk (Uint8Array, spec 12.5).
    * Needs ctx.extent, ctx.scan, ctx.heights (or null), ctx.masks.union (or the four masks),
    * ctx.patches.
    */
@@ -102,9 +102,36 @@
       patchCell[k] = cellOfCtrl(n, cell, minX, maxZ, p.x, p.z);
     }
 
-    const ctrl = { n, cell, minX, maxZ, h, playable, patchDist, playableIdx, nPlayable, patchCell, cx, cz };
+    const hqOk = hqOkOf(ctx, n, cx, cz);
+
+    const ctrl = { n, cell, minX, maxZ, h, playable, patchDist, playableIdx, nPlayable, patchCell, cx, cz, hqOk };
     ctx.ctrl = ctrl;
     return ctrl;
+  }
+
+  /**
+   * hqOk[ci] = 1 when the scan cell nearest to the control-cell centre and its 8 neighbours are
+   * valid on hq_Sol AND hq_Cent (spec 12.1: an expansion HQ valid for both factions).
+   */
+  function hqOkOf(ctx, n, cx, cz) {
+    const N = n * n, out = new Uint8Array(N), sc = ctx.scan, w = sc.w, hh = sc.h, m = ctx.masks || {};
+    let both = m.hqBoth;
+    if (!both && m.hqSol && m.hqCent) {
+      both = new Uint8Array(w * hh);
+      for (let q = 0; q < both.length; q++) both[q] = m.hqSol[q] && m.hqCent[q] ? 1 : 0;
+    }
+    if (!both) return out;
+    for (let c = 0; c < N; c++) {
+      const px = Math.round((cx[c] - sc.minX) / sc.step), py = Math.round((sc.maxZ - cz[c]) / sc.step);
+      if (px < 1 || py < 1 || px >= w - 1 || py >= hh - 1) continue;
+      let ok = 1;
+      for (let dy = -1; ok && dy <= 1; dy++) {
+        const row = (py + dy) * w + px;
+        if (!both[row - 1] || !both[row] || !both[row + 1]) ok = 0;
+      }
+      out[c] = ok;
+    }
+    return out;
   }
 
   function unionOf(m, len) {

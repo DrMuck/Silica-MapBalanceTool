@@ -30,7 +30,10 @@
    * Extras beyond spec 8.2: target {Balterium, Biotics} (the kept total G4 asks for: the
    * requested count, or every patch not removed by the kit when the request is >= vanilla),
    * vanilla counts, kitK {human, alien} (kit size used), available {type: n} (pool left for the
-   * fill), paired (number of paired adds, step 3; 0 = the plan never read the human regions).
+   * fill), paired (number of paired adds, step 3; 0 = the plan never read the human regions),
+   * layer {Sol, Cent} (spec 12.5: own-side kept Balterium with R_b < d <= reach*R_c + R_b),
+   * layerCap {deflected, forced} (fill picks moved by the layer cap of spec 12.3 / taken
+   * although inadmissible because no admissible patch was left).
    */
   function plan(ctx, settings, set, fields, hooks) {
     const P = ctx.patches, nP = P.length, ctrl = ctx.ctrl;
@@ -126,6 +129,23 @@
       if (P[k].type !== 'Balterium' || keep[k]) continue;
       for (let i = 0; i < humans.length; i++) if (inR[i][k]) tag[k] |= 1 << i;
     }
+    // Layer cap (spec 12.3): zone[k] = human i when Balterium k lies on i's side (fields.owner
+    // of its control cell; Euclidean fallback: nearer to i than to every other structure) with
+    // R_b < d(k, s_i) <= reach*R_c + R_b, else -1. layer[i] = kept patches in i's zone. A fill
+    // pick in zone i is inadmissible while layer[i] >= layer[j] + 2 for some other human j;
+    // the nearest admissible patch to the farthest cell is taken instead, the nearest one when
+    // none is admissible (coverage wins). Paired adds inside the kits are exempt.
+    const zone = layerZones(ctx, settings, set, fields), layerN = new Int32Array(humans.length);
+    for (let k = 0; k < nP; k++) if (zone[k] >= 0 && keep[k]) layerN[zone[k]]++;
+    const capOn = humans.length > 1;
+    const admissible = k => {
+      const i = zone[k];
+      if (i < 0) return true;
+      for (let j = 0; j < humans.length; j++) if (j !== i && layerN[i] >= layerN[j] + 2) return false;
+      return true;
+    };
+    const keepB = k => { if (zone[k] >= 0) layerN[zone[k]]++; };
+    let capDeflected = 0, capForced = 0;
     let regions = null, nPaired = 0;
     // playable control cells whose centre lies within R_b of each human (built on first use)
     const regionsOf = () => {
@@ -213,11 +233,18 @@
       globalMax();
       for (let k = 0; k < nP; k++) if (keep[k] && P[k].type === t) absorb(k);
       let m = target[t] - keptT;
+      const cap = capOn && t === 'Balterium';
       while (m > 0 && pool.length && jm >= 0) {
-        let bi = -1, bv = Infinity;
+        let bi = -1, bv = Infinity, ai = -1, av = Infinity;
         for (let q = 0; q < pool.length; q++) {
           const k = pool[q], v = PD[k][jm] + bias[k];
           if (bi < 0 || v < bv || (v === bv && P[k].idx < P[pool[bi]].idx)) { bv = v; bi = q; }
+          if (cap && (ai < 0 || v < av || (v === av && P[k].idx < P[pool[ai]].idx))
+            && ((paired && tag[k]) || admissible(k))) { av = v; ai = q; }
+        }
+        if (cap) {
+          if (ai < 0) capForced++;
+          else if (ai !== bi) { capDeflected++; bi = ai; }
         }
         const k = pool[bi];
         pool.splice(bi, 1);
@@ -229,6 +256,7 @@
           if (m < 1 + need.length) continue;
           if (!need.every(i => pool.some(q => tag[q] === 1 << i))) continue;
           keep[k] = 1;
+          keepB(k);
           absorb(k);
           m--;
           for (const i of need) {
@@ -236,6 +264,7 @@
             const kq = pool[q];
             pool.splice(q, 1);
             keep[kq] = 1;
+            keepB(kq);
             absorb(kq);
             m--;
           }
@@ -243,6 +272,7 @@
           continue;
         }
         keep[k] = 1;
+        keepB(k);
         absorb(k);
         m--;
       }
@@ -277,7 +307,52 @@
       rings[r] = { r0, r1 };
     }
 
-    return { kept, removed, frozen: frozenSet, kit, rings, gap, target, vanilla, kitK: { human: kH, alien: kA }, available, paired: nPaired };
+    // layer per human role (spec 12.5; hva: Sol and Cent alias the one human), from the final keep
+    const layer = {};
+    const layerFinal = new Int32Array(humans.length);
+    for (let k = 0; k < nP; k++) if (keep[k] && zone[k] >= 0) layerFinal[zone[k]]++;
+    for (const r of ['Sol', 'Cent']) {
+      const i = humans.findIndex(hm => hm.c === set[r]);
+      if (i >= 0) layer[r] = layerFinal[i];
+    }
+
+    return { kept, removed, frozen: frozenSet, kit, rings, gap, target, vanilla, kitK: { human: kH, alien: kA }, available, paired: nPaired,
+      layer, layerCap: { deflected: capDeflected, forced: capForced } };
+  }
+
+  /**
+   * Layer zones (spec 12.3/12.5), per patch k of ctx.patches: index of the human (distinct
+   * structures in the order Sol, Cent) whose expansion layer holds Balterium k, else -1. In the
+   * layer = on that human's side (fields.owner of the patch's control cell; without fields:
+   * strictly nearer to it than to every other structure of the set) and
+   * R_b < d(k, s_i) <= reach*R_c + R_b (Euclidean). plan() reads the set's positions beyond the
+   * kit orders only through this array, so a plan cache keyed on the kit orders must add it.
+   */
+  function layerZones(ctx, settings, set, fields) {
+    const P = ctx.patches, nP = P.length, R = radii(settings);
+    const ex = (settings && settings.expansion) || {};
+    const layerR = (ex.reach > 0 ? ex.reach : 0.85) * R.chain + R.build;
+    const humans = [], structs = [];
+    for (const r of ['Sol', 'Cent']) if (set[r] && !humans.some(h => h.c === set[r])) humans.push({ role: r, c: set[r] });
+    for (const r of ['Sol', 'Cent', 'Alien']) if (set[r] && !structs.includes(set[r])) structs.push(set[r]);
+    const own = fields && fields.owner && fields.sides ? fields : null, PC = ctx.ctrl.patchCell;
+    const zone = new Int8Array(nP).fill(-1);
+    for (let k = 0; k < nP; k++) {
+      if (P[k].type !== 'Balterium') continue;
+      for (let i = 0; i < humans.length; i++) {
+        const d = distTo(ctx, humans[i].c, k);
+        if (d <= R.build || d > layerR) continue;
+        let mine;
+        if (own) {
+          const o = own.owner[PC[k]];
+          mine = o >= 0 && own.sides[o] === humans[i].role;
+        } else {
+          mine = structs.every(c => c === humans[i].c || distTo(ctx, c, k) > d);
+        }
+        if (mine) { zone[k] = i; break; }
+      }
+    }
+    return zone;
   }
 
   /** Nest kit cap per mode: the Nest's fair share of the Biotics budget, N_O / (humans + 1). */
@@ -308,5 +383,5 @@
     return bq;
   }
 
-  return { plan, alienKitCap };
+  return { plan, alienKitCap, layerZones };
 }));

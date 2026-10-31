@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-// Spawn Generator harness (docs/SPAWN_GENERATOR.md, T5).
+// Spawn Generator harness (docs/SPAWN_GENERATOR.md, T5 and 12.6).
 //
 //   node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir]
 //                             [--no-determinism] [--no-seed-check] [--no-selftest] [--strict]
+//   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
 //
 // Builds GenRaw from disk (pngjs for masks and heights, Terrain.decode for heights), runs
 // GenContext.build + GenSearch.run for every map x mode, writes <out>/gen_report.md,
 // <out>/gen_report.json and <out>/layouts/<GenLayout.fileName> (top 3).
 // Exit code 1 if a run throws, a run has no candidate, the determinism check fails or a
 // selftest fails; --strict also fails on threshold violations (timing, gates, layout checks).
+//
+// --layout mode (spec 12.6): evaluates existing layout JSONs (the tool's export or a generated
+// one: spawns + removed_patches, radii from its `settings`) with GenMetrics.evaluate on the
+// geodesic fields and prints gates, terms and the expansion curves; nothing else runs.
 'use strict';
 
 const fs = require('fs');
@@ -109,7 +114,8 @@ function defaultSettings(raw, mode, seed) {
     enemyDistance: Math.min(2700, Math.max(1300, 0.9 * extent)),
     counts: { balterium: Math.round(0.75 * v.Balterium), biotics: Math.round(0.75 * v.Biotics) },
     minKit: 3, minKitAlien: 4, kitCap: null,
-    weights: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1 },
+    weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 },
+    expansion: { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] },
     exposure: { overlook: 0.5, highground: 0.3, openness: 0.2, weight: 1.0 },
     exposureCut: 0.75,
     controlModel: 'geodesic', slopeCost: { k: 1.0, s0: 0.25, sMax: 0.7 },
@@ -258,6 +264,10 @@ function summarize(raw, mode, seed, run, E) {
   row.kit = m.kit || (ev.plan && ev.plan.kit) || null;
   row.gap = m.gap || (ev.plan && ev.plan.gap) || null;
   row.T = m.T || null;
+  row.expansion = m.expansion || null;
+  row.expRatio = m.expansionRatio || null;
+  // G5 (spec 12.6): does any presented set pass it (the top-1 then must, unless it ranks on fewer gate fails)
+  row.g5Shown = result.candidates.map(e => !(e.gateFails || []).includes('G5'));
   if (ev.plan && ev.plan.kept) {
     row.kept = { Balterium: ev.plan.kept.Balterium.length, Biotics: ev.plan.kept.Biotics.length };
     row.removed = ev.plan.removed ? ev.plan.removed.length : null;
@@ -321,12 +331,31 @@ function thresholdIssues(row) {
   if (row.error) return out;
   const ms = typeof row.ms === 'number' ? row.ms : row.searchMs;
   if (ms > msLimit(row.extent)) out.push(`ms ${Math.round(ms)} > ${msLimit(row.extent)}`);
-  if (row.gateFails && row.gateFails.length && !EXPECTED_GATE_FAILS.has(`${row.map}|${row.mode}`)) {
-    out.push(`top-1 fails ${row.gateFails.join(',')}`);
-  }
+  const g14 = (row.gateFails || []).filter(g => g !== 'G5');
+  if (g14.length && !EXPECTED_GATE_FAILS.has(`${row.map}|${row.mode}`)) out.push(`top-1 fails ${g14.join(',')}`);
+  if (g5Miss(row)) out.push('top-1 fails G5 while a presented set passes it');
   if (!gapOk(row)) out.push(`gap B ${Math.round(row.gap.Balterium)} > ${Math.round(gapLimit(row))}`);
   for (const l of row.layouts || []) if (l.issues.length) out.push(`layout #${l.rank}: ${l.issues.join('; ')}`);
   return out;
+}
+
+/** Spec 12.6: the top-1 fails G5 although a presented set passes it. */
+function g5Miss(row) {
+  return !!(row.gateFails && row.gateFails.includes('G5') && row.g5Shown && row.g5Shown.some(Boolean));
+}
+
+/** Human keys of an expansion report (hva: the one human position). */
+function expHumans(exp) { return exp ? ['Sol', 'Cent'].filter(k => exp[k]) : []; }
+
+/** "S 7/11/13 C 14/18/20" */
+function fmtCurves(exp) {
+  return expHumans(exp).map(k => `${short(k)} ${exp[k].V.join('/')}`).join(' ') || '-';
+}
+
+/** min/max at k = 1 and k = K, or null (hva, no curves). */
+function expEnds(row) {
+  const r = row.expRatio;
+  return r && r.length ? { first: r[0], last: r[r.length - 1] } : null;
 }
 
 function writeReport(outDir, rows, extra) {
@@ -336,10 +365,11 @@ function writeReport(outDir, rows, extra) {
     `${rows.length} runs | amounts ${AMOUNTS.balterium}/${AMOUNTS.biotics}`, '');
   L.push('Times: `ms` = GenResult.stats.ms, `ctx` = GenContext.build wall time, `run` = GenSearch.run wall time. ' +
     'Limit: 3000 ms on every map. Gate fails are expected only for BlackIsle and Citadel hvhva. ' +
-    'Gap check: gap B <= max(900 m, 1.05 x vanilla gap B).', '');
+    'Gap check: gap B <= max(900 m, 1.05 x vanilla gap B). ' +
+    'G5 (spec 12.2) is reported separately: a top-1 G5 fail is a miss only if a presented set passes G5.', '');
 
   L.push('## Summary', '');
-  L.push('| map | mode | ms | ctx | run | stages cand/s1/s2/ref | cand h/a | s1/s2 sets | results | gate fails | score | T1 | T2 | T3 | T4 | T5 | status |');
+  L.push('| map | mode | ms | ctx | run | stages cand/s1/s2/ref | cand h/a | s1/s2 sets | results | gate fails | score | T1 | T2 | T3 | T4 | T6 | status |');
   L.push('|---|---|--:|--:|--:|---|---|---|--:|---|--:|--:|--:|--:|--:|--:|---|');
   for (const r of rows) {
     if (r.error) {
@@ -354,7 +384,23 @@ function writeReport(outDir, rows, extra) {
     const stages = r.timing ? `${f0(tm.candidates)}/${f0(tm.stage1)}/${f0(tm.stage2)}/${f0(tm.refine)}` : '-';
     L.push(`| ${r.map} | ${r.mode} | ${f0(r.ms)} | ${f0(r.buildMs)} | ${f0(r.searchMs)} | ${stages} | ${f0(c.human)}/${f0(c.alien)} | ` +
       `${f0(r.stage1Sets)}/${f0(r.stage2Sets)} | ${r.nResults} | ${r.gateFails ? (r.gateFails.join(',') || '-') : 'n/a'} | ${f2(r.score)} | ` +
-      `${f2(t.T1)} | ${f2(t.T2)} | ${f2(t.T3)} | ${f2(t.T4)} | ${f2(t.T5)} | ${status} |`);
+      `${f2(t.T1)} | ${f2(t.T2)} | ${f2(t.T3)} | ${f2(t.T4)} | ${f2(t.T6)} | ${status} |`);
+  }
+  L.push('');
+
+  L.push('## Expansion layer (top-1, spec 12)', '');
+  L.push('V(1..K) = Balterium grabbed by the best 1..K expansion HQs per human (greedy, own side, outside the kit); ' +
+    'layer = own-side kept Balterium outside R_b within reach x R_c + R_b; min/max = min_i V_i(k) / max_i V_i(k) at k = 1 and k = K ' +
+    '(target >= 0.85 on >= 11 of 13 hvh maps); G5 = |dV(1)| <= 1 and |dV(K)| <= 2; G5 shown = presented sets passing G5.', '');
+  L.push('| map | mode | V(1..K) | layer | min/max k=1 | min/max k=K | G5 | G5 shown | T6 |');
+  L.push('|---|---|---|---|--:|--:|---|---|--:|');
+  for (const r of rows) {
+    if (r.error || !r.expansion) continue;
+    const e = expEnds(r);
+    const g5 = r.mode === 'hva' ? '-' : (r.gateFails.includes('G5') ? (g5Miss(r) ? 'FAIL (miss)' : 'fail (none passes)') : 'ok');
+    const shown = r.mode === 'hva' ? '-' : `${r.g5Shown.filter(Boolean).length}/${r.g5Shown.length}`;
+    L.push(`| ${r.map} | ${r.mode} | ${fmtCurves(r.expansion)} | ${expHumans(r.expansion).map(k => `${short(k)} ${r.expansion[k].layer}`).join(' ')} | ` +
+      `${e ? f2(e.first) : '-'} | ${e ? f2(e.last) : '-'} | ${g5} | ${shown} | ${f2((r.terms || {}).T6)} |`);
   }
   L.push('');
 
@@ -394,7 +440,7 @@ function writeReport(outDir, rows, extra) {
 
 function parseArgs(argv) {
   const a = { maps: null, modes: MODES.slice(), seed: 1, out: path.join(__dirname, 'out'),
-    determinism: true, seedCheck: true, selftest: true, strict: false };
+    determinism: true, seedCheck: true, selftest: true, strict: false, layouts: [] };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i], next = () => argv[++i];
     if (k === '--maps') a.maps = next().split(',').map(s => s.trim()).filter(Boolean);
@@ -405,9 +451,11 @@ function parseArgs(argv) {
     else if (k === '--no-seed-check') a.seedCheck = false;
     else if (k === '--no-selftest') a.selftest = false;
     else if (k === '--strict') a.strict = true;
+    else if (k === '--layout') a.layouts.push(path.resolve(next()));
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
-        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict]');
+        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict]\n' +
+        'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]');
       process.exit(0);
     } else throw new Error(`unknown argument ${k}`);
   }
@@ -421,8 +469,99 @@ function posKey(row) {
   return Object.keys(row.positions).sort().map(k => `${k}:${Math.round(row.positions[k].x)},${Math.round(row.positions[k].z)}`).join(' ');
 }
 
+// ── --layout mode (spec 12.6) ─────────────────────────────────────────────
+
+/**
+ * Evaluates one layout JSON: settings = the engine defaults for its map and mode, radii from
+ * layout.settings; a generated layout also brings enemyDistance / counts / minKit from
+ * _meta.generator.settings (weights and expansion stay the current defaults), a hand-made one
+ * gets counts = its kept totals (G4 then only checks the plan). Spawns: the isSpawn entry (else
+ * [0]) per faction, G1 on the scan cell under it, distances from the exact position.
+ */
+function evalLayout(E, file, MAP_CONFIG) {
+  const L = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const raw = loadRaw(L.map, MAP_CONFIG);
+  const gm = L.game_modes || {};
+  const mode = MODES.find(m => gm[m]) || 'hvh';
+  const ls = L.settings || {}, meta = (L._meta && L._meta.generator && L._meta.generator.settings) || {};
+  const removed = new Set((L.resources && L.resources.removed_patches) || []);
+  const kept = { Balterium: [], Biotics: [] };
+  for (const p of raw.resources.resources || []) {
+    if (p.active === false || !kept[p.type] || removed.has(p.idx)) continue;
+    kept[p.type].push(p.idx);
+  }
+  const over = {
+    mode, seed: meta.seed !== undefined ? meta.seed : 1,
+    radii: { build: ls.solBuildRadius || 1000, chain: ls.solChainRange || 2500, nest: ls.alienBuildRadius || 1200 },
+    counts: meta.counts || { balterium: kept.Balterium.length, biotics: kept.Biotics.length },
+  };
+  for (const k of ['enemyDistance', 'minKit', 'minKitAlien', 'edgeMargin', 'controlModel']) if (meta[k] !== undefined) over[k] = meta[k];
+  const settings = E.GenContext.defaultSettings(raw, over);
+  const ctx = E.GenContext.build(raw, settings);
+  const sc = ctx.scan;
+  const spawnOf = fac => {
+    const list = (L.spawns && L.spawns[fac]) || [];
+    return list.find(s => s && s.isSpawn) || list[0] || null;
+  };
+  const candOf = (fac, role) => {
+    const s = spawnOf(fac);
+    if (!s) throw new Error(`${path.basename(file)}: no ${fac} spawn`);
+    const px = Math.round((s.x - sc.minX) / sc.step), py = Math.round((sc.maxZ - s.z) / sc.step);
+    const c = E.GenCandidates.at(ctx, settings, role, px, py, fac);
+    c.x = s.x; c.z = s.z;
+    for (let k = 0; k < ctx.patches.length; k++) c.pd[k] = Math.hypot(ctx.patches[k].x - s.x, ctx.patches[k].z - s.z);
+    delete c.v1solo;
+    return c;
+  };
+  const set = {};
+  set.Sol = candOf('Sol', 'human');
+  set.Cent = mode === 'hva' ? set.Sol : candOf('Cent', 'human');
+  if (mode !== 'hvh') set.Alien = candOf('Alien', 'alien');
+  const fields = E.GenGrid.fields(ctx, settings, set, new Map());
+  const plan = {
+    kept, removed: Array.from(removed).sort((a, b) => a - b), frozen: new Set(), kit: {}, rings: {}, gap: null,
+    target: { Balterium: kept.Balterium.length, Biotics: kept.Biotics.length },
+  };
+  const ev = E.GenMetrics.evaluate(ctx, settings, set, fields, plan);
+  return { file, L, mode, settings, set, ev };
+}
+
+function printLayoutEval(r) {
+  const { ev, settings, mode, set } = r, m = ev.metrics || {};
+  const gates = E_GATES(r).map(g => `${g}:${ev.gateFails.includes(g) ? 'FAIL' : 'ok'}`).join(' ');
+  const pos = rolesOf(set, mode).map(k => `${short(k)}(${f0(set[k].x)},${f0(set[k].z)})`).join(' ');
+  console.log(`${path.basename(r.file)}: ${r.L.map} ${mode}  R_b ${settings.radii.build} R_c ${settings.radii.chain} ` +
+    `d* ${f0(settings.enemyDistance)}  kept B/O ${m.kept ? `${m.kept.Balterium}/${m.kept.Biotics}` : '-'}`);
+  console.log(`  spawns ${pos}  d ${fmtMap(m.distances, f0, pairKey)}  kit ${fmtMap(m.kit, f0, short)}`);
+  console.log(`  gates ${gates}${ev.gateFails.length ? `  -> fails ${ev.gateFails.join(',')}` : ''}`);
+  console.log(`  terms ${Object.keys(ev.terms).map(k => `${k} ${f2(ev.terms[k])}`).join('  ')}  score ${f2(ev.score)}`);
+  const ex = m.expansion || {};
+  for (const k of expHumans(ex)) {
+    const cells = ex[k].cells.map(c => (c ? `(${f0(c.x)},${f0(c.z)})` : '-')).join(' ');
+    console.log(`  V ${k.padEnd(4)} ${ex[k].V.join('/').padEnd(10)} layer ${ex[k].layer}  cells ${cells}`);
+  }
+  if (m.expansionRatio) console.log(`  min/max per k ${m.expansionRatio.map(v => f2(v)).join(' / ')}`);
+}
+
+function E_GATES(r) { return r.mode === 'hva' ? ['G1', 'G2', 'G3', 'G4'] : ['G1', 'G2', 'G3', 'G4', 'G5']; }
+
+function layoutMode(args) {
+  const MAP_CONFIG = loadMapConfig();
+  const E = loadEngine();
+  let bad = false;
+  for (const file of args.layouts) {
+    try { printLayoutEval(evalLayout(E, file, MAP_CONFIG)); } catch (e) {
+      bad = true;
+      console.log(`${path.basename(file)}: ERROR ${e.stack || e.message}`);
+    }
+    console.log('');
+  }
+  process.exitCode = bad ? 1 : 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
+  if (args.layouts.length) return layoutMode(args);
   const MAP_CONFIG = loadMapConfig();
   const maps = args.maps || Object.keys(MAP_CONFIG);
   for (const m of maps) if (!MAP_CONFIG[m]) throw new Error(`unknown map ${m}`);
@@ -526,6 +665,27 @@ async function main() {
   checks.push(`gap check (gap B <= max(900, 1.05 x vanilla gap B)): ${gapRows.length - gapBad.length}/${gapRows.length} ok` +
     (gapBad.length ? `; fails: ${gapBad.map(r => `${r.map} ${r.mode} ${f0(r.gap.Balterium)} > ${f0(gapLimit(r))}`).join(', ')}` : ''));
   checks.push(`thresholds: ${rows.length - thrBad}/${rows.length} rows clean`);
+
+  // spec 12.6 acceptance
+  const ok = rows.filter(r => !r.error && r.gateFails);
+  const g14 = ok.filter(r => !r.gateFails.some(g => g !== 'G5'));
+  checks.push(`G1-G4 on the top-1: ${g14.length}/${rows.length} pass` +
+    (g14.length < ok.length ? `; fails: ${ok.filter(r => !g14.includes(r)).map(r => `${r.map} ${r.mode} ${r.gateFails.join(',')}`).join(', ')}` : ''));
+  const g5Rows = ok.filter(r => r.mode !== 'hva'), g5Pass = g5Rows.filter(r => !r.gateFails.includes('G5'));
+  const g5Miss_ = g5Rows.filter(g5Miss), g5None = g5Rows.filter(r => r.gateFails.includes('G5') && !g5Miss(r));
+  checks.push(`G5 on the hvh/hvhva top-1: ${g5Pass.length}/${g5Rows.length} pass; misses (a presented set passes): ` +
+    `${g5Miss_.map(r => `${r.map} ${r.mode}`).join(', ') || '-'}; no presented set passes: ${g5None.map(r => `${r.map} ${r.mode}`).join(', ') || '-'} ` +
+    `${g5Miss_.length ? 'FAIL' : 'ok'}`);
+  const hvhRows = ok.filter(r => r.mode === 'hvh' && expEnds(r));
+  const fair = hvhRows.filter(r => expEnds(r).first >= 0.85 && expEnds(r).last >= 0.85);
+  const needFair = Math.min(11, hvhRows.length);
+  checks.push(`expansion min/max >= 0.85 at k = 1 and k = K on the hvh top-1: ${fair.length}/${hvhRows.length} (need >= ${needFair}) ` +
+    `${fair.length >= needFair ? 'ok' : 'WARN'}; below: ${hvhRows.filter(r => !fair.includes(r)).map(r => `${r.map} ${fmtCurves(r.expansion)}`).join(', ') || '-'}`);
+  const five = rows.filter(r => !r.error && r.nResults === 5);
+  checks.push(`5 results per row: ${five.length}/${rows.length}` +
+    (five.length < rows.length ? `; short: ${rows.filter(r => !five.includes(r)).map(r => `${r.map} ${r.mode} ${r.nResults || 0}`).join(', ')}` : ''));
+  const msBad = rows.filter(r => !r.error && (typeof r.ms === 'number' ? r.ms : r.searchMs) > 3000);
+  checks.push(`ms <= 3000: ${rows.length - msBad.length}/${rows.length}; max ${f0(Math.max(...rows.filter(r => !r.error).map(r => r.ms || 0)))} ms`);
   checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${rows.filter(r => !r.error && r.nResults === 0).length} without candidates)`);
   if (args.strict && thrBad) fatal = true;
 

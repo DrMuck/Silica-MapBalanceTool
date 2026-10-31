@@ -1,5 +1,6 @@
-// Spawn generator: hard gates G1-G4, soft terms T1-T5, the stage-1 cheap screen and the
-// metrics self-test (docs/SPAWN_GENERATOR.md sections 3 and 6.2). UMD, DOM-free.
+// Spawn generator: hard gates G1-G5, soft terms T1-T4 + T6, the stage-1 cheap screen and the
+// metrics self-test (docs/SPAWN_GENERATOR.md sections 3, 6.2 and 12). UMD, DOM-free.
+// G5 / T6 read the expansion curve V(k) of GenExpansion (js/gen/expansion.js, spec 12.5).
 //
 // Sides: hvh = Sol, Cent; hva = Sol (the one human position, set.Sol === set.Cent) and Alien;
 // hvhva = Sol, Cent, Alien. Every pair of sides is an enemy pair. Distances in the gates and
@@ -8,17 +9,21 @@
   if (typeof module === 'object' && module.exports) {
     let grid = null;
     try { grid = require('./grid.js'); } catch (e) { grid = null; }
-    module.exports = factory(grid);
+    module.exports = factory(grid, require('./expansion.js'), root);
   } else {
-    root.GenMetrics = factory(root.GenGrid);
+    root.GenMetrics = factory(root.GenGrid, null, root);
   }
-}(typeof self !== 'undefined' ? self : this, function (GenGrid) {
+}(typeof self !== 'undefined' ? self : this, function (GenGrid, ExpMod, root) {
   'use strict';
+
+  // browser: looked up on the global at call time (script order does not matter)
+  const Exp = () => ExpMod || (root && root.GenExpansion) || null;
 
   const PRESENTATION_BAR = 3.0;
   const HUMAN_FOOTPRINT = 67;          // circumscribed HQ footprint radius (m), G1
   const HARVEST_RATE = { Balterium: 3000, Biotics: 3300 };   // amount per harvest-minute (T2)
   const DEFAULT_AMOUNTS = { balterium: 40000, biotics: 42000 };
+  const DEFAULT_EXPANSION = { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] };   // spec 12.5 / 12.8
 
   // ── settings helpers ──────────────────────────────────────────────────
 
@@ -26,9 +31,27 @@
     const r = (settings && settings.radii) || {};
     return { build: r.build || 1000, chain: r.chain || 2500, nest: r.nest || 1200 };
   }
-  function weightOf(settings, id, dflt) {
+  /** settings.weights[id], else the registry default of the term. */
+  function weightOf(settings, id) {
     const w = settings && settings.weights;
-    return w && typeof w[id] === 'number' ? w[id] : dflt;
+    if (w && typeof w[id] === 'number') return w[id];
+    const e = registry.find(q => q.id === id);
+    return e ? e.weight : 1;
+  }
+  /** {K, reach, w}: settings.expansion over the spec defaults; w cut to K entries, sum 1. */
+  function expansionParams(settings) {
+    const e = (settings && settings.expansion) || {};
+    const K = Number.isInteger(e.K) && e.K >= 1 ? e.K : DEFAULT_EXPANSION.K;
+    const reach = typeof e.reach === 'number' && e.reach > 0 ? e.reach : DEFAULT_EXPANSION.reach;
+    return { K, reach, w: curveWeights(Array.isArray(e.w) ? e.w : DEFAULT_EXPANSION.w, K) };
+  }
+  /** The first K curve weights normalised to sum 1 (equal weights when w is short or invalid). */
+  function curveWeights(w, K) {
+    let out = [];
+    for (let k = 0; k < K; k++) out.push(typeof w[k] === 'number' && w[k] >= 0 ? w[k] : NaN);
+    if (out.some(v => !isFinite(v))) out = out.map(() => 1);
+    const sum = out.reduce((a, b) => a + b, 0);
+    return sum > 0 ? out.map(v => v / sum) : out.map(() => 1 / K);
   }
   function amountOf(settings, type) {
     const a = (settings && settings.amounts) || DEFAULT_AMOUNTS;
@@ -120,6 +143,31 @@
     for (const v of vals) { if (v < lo) lo = v; if (v > hi) hi = v; }
     if (!(hi > 0)) return 1;
     return lo / hi;
+  }
+
+  /**
+   * T6 (spec 12.2) from the curves Vs = [V_i] (one array of K values per human): ratio_k =
+   * min_i V_i(k) / max_i V_i(k) (1 when all are 0), T6 = (1 - sum_k w_k ratio_k) / 0.10.
+   */
+  function t6Of(Vs, w) {
+    const ratio = [];
+    let s = 0;
+    for (let k = 0; k < w.length; k++) {
+      const r = balance(Vs.map(V => V[k] || 0));
+      ratio.push(r);
+      s += w[k] * r;
+    }
+    return { value: (1 - s) / 0.10, ratio };
+  }
+
+  /** G5 (spec 12.2): max_i - min_i over the humans of V(1) <= 1 and of V(K) <= 2. */
+  function g5Of(Vs) {
+    if (Vs.length < 2) return true;
+    const spread = k => {
+      const xs = Vs.map(V => V[k] || 0);
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    return spread(0) <= 1 && spread(Vs[0].length - 1) <= 2;
   }
 
   /**
@@ -240,7 +288,7 @@
       }
     }
     // kit / ring / nearest per side (Euclidean, the game's build rule)
-    const kit = {}, rings = {}, near = {}, amount0 = {};
+    const kit = {}, rings = {}, near = {};
     for (const sd of sides) {
       const pd = sd.cand.pd, type = sd.type;
       const r0 = sd.human ? R.build : R.nest, r1 = r0 + R.chain, v = amountOf(settings, type);
@@ -254,9 +302,36 @@
       kit[sd.key] = n0;
       rings[sd.key] = { r0: { n: n0, amount: n0 * v }, r1: { n: n1, amount: n1 * v } };
       near[sd.key] = dn;
-      amount0[sd.key] = n0 * v;
     }
-    return { mode, sides, pairs, kept, kit, rings, near, amount0, R, info, fields, plan };
+    return { mode, sides, pairs, kept, kit, rings, near, R, info, fields, plan };
+  }
+
+  /**
+   * Expansion curves of the humans (spec 12.1), once per evaluation (cached on m):
+   * {keys: [human key], Vs: [V per human], res: {[key]: {V, cells, layer}}, K}. hva: the one
+   * human position (reported, not scored). Own side = fields.owner; without fields the
+   * Euclidean rule against the other structures.
+   */
+  function expansionOf(ctx, settings, m) {
+    if (m.exp) return m.exp;
+    const X = Exp();
+    if (!X) throw new Error('GenMetrics: GenExpansion (js/gen/expansion.js) is not loaded');
+    const K = expansionParams(settings).K;
+    const keptBalt = new Uint8Array(ctx.patches.length);
+    for (const k of m.kept.Balterium) keptBalt[k] = 1;
+    const fsides = m.fields && Array.isArray(m.fields.sides) ? m.fields.sides : null;
+    const keys = [], Vs = [], res = {};
+    m.sides.forEach((sd, s) => {
+      if (!sd.human) return;
+      const idx = fsides ? fsides.indexOf(sd.key) : s;
+      const others = m.sides.filter(o => o.cand !== sd.cand).map(o => o.cand);
+      const r = X.curve(ctx, settings, sd.cand, idx, m.fields || null, keptBalt, K, others);
+      keys.push(sd.key);
+      Vs.push(r.V);
+      res[sd.key] = r;
+    });
+    m.exp = { keys, Vs, res, K };
+    return m.exp;
   }
 
   // ── registry ──────────────────────────────────────────────────────────
@@ -311,13 +386,19 @@
       },
     },
     {
+      id: 'G5', kind: 'hard', modes: ['hvh', 'hvhva'], weight: 1, label: 'G5 expansion',
+      compute(ctx, settings, set, m) {
+        return g5Of(expansionOf(ctx, settings, m).Vs);
+      },
+    },
+    {
       id: 'T1', kind: 'soft', modes: ALL, weight: 1, label: 'T1 separation',
       compute(ctx, settings, set, m) {
         return t1Of(m.pairs.map(p => p.d), dStar(settings), m.mode === 'hvhva');
       },
     },
     {
-      id: 'T2', kind: 'soft', modes: ALL, weight: 1, label: 'T2 resources over control',
+      id: 'T2', kind: 'soft', modes: ALL, weight: 0.5, label: 'T2 resources over control',
       compute(ctx, settings, set, m) {
         // balance of the shares of each side's own resource type; T (harvest-minutes) is reported
         const r = territoryTotals(ctx, settings, m);
@@ -327,7 +408,7 @@
       },
     },
     {
-      id: 'T3', kind: 'soft', modes: ALL, weight: 1, label: 'T3 control balance',
+      id: 'T3', kind: 'soft', modes: ALL, weight: 0.5, label: 'T3 control balance',
       compute(ctx, settings, set, m) {
         const sh = sharesOf(m);
         let v = (1 - balance(Object.values(sh))) / 0.10;
@@ -347,17 +428,11 @@
       },
     },
     {
-      id: 'T5', kind: 'soft', modes: ['hvh', 'hvhva'], weight: 1, label: 'T5 kit softness',
+      id: 'T6', kind: 'soft', modes: ['hvh', 'hvhva'], weight: 1, label: 'T6 expansion balance',
       compute(ctx, settings, set, m) {
-        const hs = m.sides.filter(s => s.human).map(s => s.key);
-        const near = hs.map(k => m.near[k]);
-        let v = 0;
-        if (near.every(isFinite)) v += pos(0.85 - balance(near)) / 0.10;
-        else if (near.some(isFinite)) v += 0.85 / 0.10;
-        v += (1 - balance(hs.map(k => m.amount0[k]))) / 0.10;
-        const n1 = hs.map(k => m.rings[k].r1.n);
-        v += pos(Math.max(...n1) - Math.min(...n1) - 1) * 0.5;
-        return v;
+        const t = t6Of(expansionOf(ctx, settings, m).Vs, expansionParams(settings).w);
+        m.expRatio = t.ratio;
+        return t.value;
       },
     },
   ];
@@ -431,7 +506,7 @@
       } else {
         const v = e.compute(ctx, settings, set, m);
         terms[e.id] = v;
-        score += weightOf(settings, e.id, e.weight) * v;
+        score += weightOf(settings, e.id) * v;
       }
     }
     const metrics = reportMetrics(ctx, settings, m);
@@ -453,11 +528,23 @@
     }
     const near = {};
     for (const sd of m.sides) near[sd.key] = round(m.near[sd.key], 1);
+    // expansion curves (spec 12.5): every mode reports them, hvh / hvhva also the min/max ratios
+    const ex = expansionOf(ctx, settings, m), expansion = {}, c = ctx.ctrl;
+    for (const key of ex.keys) {
+      const r = ex.res[key];
+      expansion[key] = {
+        V: r.V.slice(), layer: r.layer,
+        cells: r.cells.map(ci => (ci >= 0 ? { x: round(c.cx[ci], 1), z: round(c.cz[ci], 1) } : null)),
+      };
+    }
+    let expansionRatio = null;
+    if (ex.keys.length > 1) expansionRatio = (m.expRatio || t6Of(ex.Vs, expansionParams(settings).w).ratio).map(v => round(v, 4));
     return {
       distances, squeeze: m.mode === 'hvhva' ? round(squeezeOf(m), 4) : null,
       shares, shares2, borders, kit: Object.assign({}, m.kit), rings: m.rings, nearest: near, exposure, elevation, T,
       gap: m.plan && m.plan.gap ? { Balterium: round(m.plan.gap.Balterium, 1), Biotics: round(m.plan.gap.Biotics, 1) } : null,
       kept: { Balterium: m.kept.Balterium.length, Biotics: m.kept.Biotics.length },
+      expansion, expansionRatio,
     };
   }
 
@@ -498,13 +585,30 @@
     if (mode === 'hvhva') {
       const sq = squeeze3(ds[0], ds[1], ds[2]);
       if (sq < 0.3 && !noReject) return { reject: true, partial: Infinity };
-      partial += weightOf(settings, 'T3', 1) * pos(0.6 - sq) / 0.2;
+      partial += weightOf(settings, 'T3') * pos(0.6 - sq) / 0.2;
     }
-    partial += weightOf(settings, 'T1', 1) * t1Of(ds, dstar, mode === 'hvhva');
+    partial += weightOf(settings, 'T1') * t1Of(ds, dstar, mode === 'hvhva');
     const wExp = settings.exposure && settings.exposure.weight != null ? settings.exposure.weight : 1;
-    partial += weightOf(settings, 'T4', 1) * t4Of(sides.map(s => s.cand), wExp).value;
-    if (mode !== 'hva') partial += Math.abs(set.Sol.nBalt - set.Cent.nBalt) * 0.5;
+    partial += weightOf(settings, 'T4') * t4Of(sides.map(s => s.cand), wExp).value;
+    if (mode !== 'hva') {
+      partial += Math.abs(set.Sol.nBalt - set.Cent.nBalt) * 0.5;
+      // expansion proxy (spec 12.2): |V1_solo(Sol) - V1_solo(Cent)| * settings.expansion.proxy.
+      // Default 0: at the spec's 0.5 the full harness lost the gap check on GreatErg hvhva and
+      // equal-or-worse top-1 scores on 38/39 rows (G5 / min-max targets met either way), since
+      // the vanilla, enemy-blind V1_solo displaced good sets from the stage-1 shortlist.
+      const kx = settings.expansion && typeof settings.expansion.proxy === 'number' ? settings.expansion.proxy : 0;
+      if (kx) partial += Math.abs(v1Solo(ctx, settings, set.Sol) - v1Solo(ctx, settings, set.Cent)) * kx;
+    }
     return { reject: false, partial };
+  }
+
+  /** cand.v1solo (GenCandidates.at precomputes it); computed and stored once when missing. */
+  function v1Solo(ctx, settings, cand) {
+    if (typeof cand.v1solo !== 'number') {
+      const X = Exp();
+      cand.v1solo = X ? X.solo(ctx, settings, cand) : 0;
+    }
+    return cand.v1solo;
   }
 
   /** Euclidean soft-Voronoi T2 proxy on vanilla amounts (weighted penalty, own-type shares). */
@@ -530,7 +634,7 @@
     }
     // share of the own type, like T2
     for (let s = 0; s < ns; s++) T[s] = tot[sides[s].type] > 0 ? T[s] / tot[sides[s].type] : 0;
-    return weightOf(settings, 'T2', 1) * (1 - balance(T)) / 0.10;
+    return weightOf(settings, 'T2') * (1 - balance(T)) / 0.10;
   }
 
   /**
@@ -542,13 +646,16 @@
     const mode = settings.mode, sides = sidesOf(set, mode), ds = [];
     for (let i = 0; i < sides.length; i++) for (let j = i + 1; j < sides.length; j++) ds.push(dist(sides[i].cand, sides[j].cand));
     const wExp = settings.exposure && settings.exposure.weight != null ? settings.exposure.weight : 1;
-    let lb = weightOf(settings, 'T1', 1) * t1Of(ds, dStar(settings), mode === 'hvhva') +
-      weightOf(settings, 'T4', 1) * t4Of(sides.map(q => q.cand), wExp).value;
-    if (mode === 'hvhva') lb += weightOf(settings, 'T3', 1) * pos(0.6 - squeeze3(ds[0], ds[1], ds[2])) / 0.2;
+    let lb = weightOf(settings, 'T1') * t1Of(ds, dStar(settings), mode === 'hvhva') +
+      weightOf(settings, 'T4') * t4Of(sides.map(q => q.cand), wExp).value;
+    if (mode === 'hvhva') lb += weightOf(settings, 'T3') * pos(0.6 - squeeze3(ds[0], ds[1], ds[2])) / 0.2;
     return lb;
   }
 
-  /** Stage-1 score (spec 6.2): T1 + T4 + Euclidean T2 proxy + |delta nBalt| * 0.5. */
+  /**
+   * Stage-1 score (spec 6.2, 12.2): T1 + T4 + Euclidean T2 proxy + |delta nBalt| * 0.5 +
+   * |delta V1_solo| * settings.expansion.proxy (default 0, see cheapGeom).
+   */
   function cheap(ctx, settings, set, opts) {
     const g = cheapGeom(ctx, settings, set, opts);
     if (g.reject) return { reject: true, score: Infinity };
@@ -600,19 +707,31 @@
     add('T2 shares 0.75 / 0.25 -> penalty (1 - 1/3)/0.1 = 6.666667',
       close(S[0], 0.75) && close(S[1], 0.25) && close((1 - balance(S)) / 0.10, 6.666667, 1e-5), Array.from(S));
 
-    // G1 / G2 / G3 / G4 / T3 / T5 on a small synthetic context
+    // T6 / G5 formulas (spec 12.2, 12.6): V_Sol = [6,6,6], V_Cent = [2,4,6]
+    const w0 = expansionParams({}).w;
+    const t6 = t6Of([[6, 6, 6], [2, 4, 6]], w0).value;
+    add('T6 [6,6,6] vs [2,4,6], w 0.45/0.35/0.20 = (1 - (0.15 + 0.233333 + 0.2))/0.1 = 4.166667', close(t6, 4.166667, 1e-5), t6);
+    add('T6 both curves 0 -> ratio 1 -> 0', close(t6Of([[0, 0, 0], [0, 0, 0]], w0).value, 0), t6Of([[0, 0, 0], [0, 0, 0]], w0));
+    add('G5: [6,6,6] vs [2,4,6] fails; [7,9,11] vs [6,8,9] passes; [7,9,11] vs [6,8,8] fails (dK 3)',
+      !g5Of([[6, 6, 6], [2, 4, 6]]) && g5Of([[7, 9, 11], [6, 8, 9]]) && !g5Of([[7, 9, 11], [6, 8, 8]]));
+    const wK2 = expansionParams({ expansion: { K: 2, w: [0.45, 0.35, 0.20] } }).w;
+    add('curve weights cut to K = 2 and normalised: 0.5625 / 0.4375', close(wK2[0], 0.5625) && close(wK2[1], 0.4375) && wK2.length === 2, wK2);
+
+    // G1 / G2 / G3 / G4 / T3 / T6 on a small synthetic context
     const fx = fixtureContext();
     const settings = {
       mode: 'hvh', enemyDistance: 990, radii: { build: 200, chain: 500, nest: 200 },
       counts: { balterium: 4, biotics: 2 }, minKit: 1, minKitAlien: 1, edgeMargin: 100,
-      weights: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1 }, exposure: { weight: 1 },
+      weights: { T1: 1, T2: 1, T3: 1, T4: 1, T6: 1 }, exposure: { weight: 1 },
     };
     const ev = evaluate(fx.ctx, settings, fx.set, fx.fields, fx.plan);
     add('fixture hvh: no gate fails', ev.gateFails.length === 0, ev.gateFails);
     add('fixture hvh: T1 = 0 at d = d*', close(ev.terms.T1, 0), ev.terms.T1);
     add('fixture hvh: T2 = 0 for mirrored patches', close(ev.terms.T2, 0, 1e-9), ev.terms.T2);
     add('fixture hvh: T3 = (1 - 0.4/0.6)/0.1 = 3.333333', close(ev.terms.T3, 3.333333, 1e-5), ev.terms.T3);
-    add('fixture hvh: T5 = 0 (equal kit, equal nearest)', close(ev.terms.T5, 0), ev.terms.T5);
+    add('fixture hvh: no expansion patches -> V = 0/0, T6 = 0, G5 holds',
+      close(ev.terms.T6, 0) && ev.metrics.expansion.Sol.V.join() === '0,0,0' && ev.metrics.expansion.Cent.V.join() === '0,0,0',
+      { T6: ev.terms.T6, expansion: ev.metrics.expansion });
     const ev2 = evaluate(fx.ctx, Object.assign({}, settings, { enemyDistance: 1300 }), fx.set, fx.fields, fx.plan);
     add('fixture hvh: G2 fails at d* = 1300 (990 < 1105)', ev2.gateFails.indexOf('G2') >= 0, ev2.gateFails);
     const plan3 = Object.assign({}, fx.plan, { kept: { Balterium: [0, 2, 3], Biotics: [4, 5] } });
@@ -638,6 +757,30 @@
     add('fixture hva: human kit 2 < minKit 3 -> G3 fails', evH3.gateFails.indexOf('G3') >= 0, evH3.gateFails);
     const chH = cheapT2(hx.ctx, sHva, hx.set);
     add('cheapT2 hva mirrored = 0 (own-type shares)', close(chH, 0, 1e-9), chH);
+    add('fixture hva: no G5 / T6, the curve is reported for the one human',
+      !('T6' in evH.terms) && evH.metrics.expansion.Sol && !evH.metrics.expansion.Cent && evH.metrics.expansionRatio === null,
+      { terms: evH.terms, expansion: evH.metrics.expansion });
+
+    // spec 12.6 fixture: R_b 200, R_c 500, reach 425. Sol has one cluster of 6 within R_b of
+    // one cell, Cent the same 6 as three pairs >= 527 m apart -> V_Sol [6,6,6], V_Cent [2,4,6]
+    const ex = expansionFixture(false), sEx = Object.assign({}, settings, { counts: { balterium: 16, biotics: 2 } });
+    const evX = evaluate(ex.ctx, sEx, ex.set, ex.fields, ex.plan), mx = evX.metrics.expansion;
+    add('expansion fixture: V_Sol = [6,6,6], V_Cent = [2,4,6], layer 6/6',
+      mx.Sol.V.join() === '6,6,6' && mx.Cent.V.join() === '2,4,6' && mx.Sol.layer === 6 && mx.Cent.layer === 6, mx);
+    add('expansion fixture: T6 = 4.166667, ratios 1/3, 2/3, 1',
+      close(evX.terms.T6, 4.166667, 1e-5) && close(evX.metrics.expansionRatio[0], 0.3333, 1e-4) && close(evX.metrics.expansionRatio[2], 1),
+      { T6: evX.terms.T6, ratio: evX.metrics.expansionRatio });
+    add('expansion fixture: only G5 fails', evX.gateFails.join() === 'G5', evX.gateFails);
+    const exM = expansionFixture(true), evM = evaluate(exM.ctx, sEx, exM.set, exM.fields, exM.plan);
+    add('expansion fixture mirrored (both one cluster of 6): G5 holds, T6 = 0',
+      evM.gateFails.length === 0 && close(evM.terms.T6, 0) && evM.metrics.expansion.Cent.V.join() === '6,6,6',
+      { fails: evM.gateFails, T6: evM.terms.T6, expansion: evM.metrics.expansion });
+    const sPx = Object.assign({}, sEx, { expansion: { proxy: 0.5 } });
+    const gX = cheapGeom(ex.ctx, sPx, ex.set), gM = cheapGeom(exM.ctx, sPx, exM.set);
+    const g0 = cheapGeom(ex.ctx, sEx, ex.set).partial - cheapGeom(exM.ctx, sEx, exM.set).partial;
+    add('stage-1 proxy 0.5: V1_solo 6 vs 2 adds |6 - 2| * 0.5 = 2 over the mirrored set; default (0) adds nothing',
+      ex.set.Sol.v1solo === 6 && ex.set.Cent.v1solo === 2 && close(gX.partial - gM.partial, 2, 1e-9) && close(g0, 0, 1e-9),
+      { solo: [ex.set.Sol.v1solo, ex.set.Cent.v1solo], dPartial: gX.partial - gM.partial, dDefault: g0 });
 
     return { ok: results.every(r => r.ok), results };
   }
@@ -658,11 +801,44 @@
     const b = fixtureBase(patches);
     const set = { Sol: b.cand(0, -495, 0, 0.2), Cent: b.cand(1, 495, 0, 0.2) };
     const fields = {
-      D: { Sol: b.field(set.Sol), Cent: b.field(set.Cent) }, owner: new Int8Array(b.n * b.n),
+      D: { Sol: b.field(set.Sol), Cent: b.field(set.Cent) }, owner: b.splitOwner(),
       shares: { Sol: 0.4, Cent: 0.6 }, borders: { 'Sol-Cent': 100 },
     };
     const plan = {
       kept: { Balterium: [0, 1, 2, 3], Biotics: [4, 5] }, removed: [], frozen: new Set([0, 1, 2, 3]),
+      kit: { Sol: 2, Cent: 2 }, rings: {}, gap: { Balterium: 0, Biotics: 0 },
+    };
+    return { ctx: b.ctx, set, fields, plan };
+  }
+
+  /**
+   * Spec 12.6 expansion fixture on the flat map (R_b 200, R_c 500): the hvh fixture's kits plus
+   * a cluster of 6 Balterium round (-495, 400) for Sol and, for Cent, three pairs round
+   * (495, 390), (495, -390), (850, 0) (mirrored = Cent gets the mirrored cluster instead).
+   */
+  function expansionFixture(mirrored) {
+    const patches = [
+      { idx: 0, type: 'Balterium', x: -500, z: 100, y: 0, amount: 40000, w: 20, h: 20 },
+      { idx: 1, type: 'Balterium', x: -500, z: -100, y: 0, amount: 40000, w: 20, h: 20 },
+      { idx: 2, type: 'Balterium', x: 500, z: 100, y: 0, amount: 40000, w: 20, h: 20 },
+      { idx: 3, type: 'Balterium', x: 500, z: -100, y: 0, amount: 40000, w: 20, h: 20 },
+      { idx: 4, type: 'Biotics', x: 0, z: 600, y: 0, amount: 42000, w: 20, h: 20 },
+      { idx: 5, type: 'Biotics', x: 0, z: -600, y: 0, amount: 42000, w: 20, h: 20 },
+    ];
+    const add = (x, z) => patches.push({ idx: patches.length, type: 'Balterium', x, z, y: 0, amount: 40000, w: 20, h: 20 });
+    const cluster = sx => { for (let q = 0; q < 6; q++) add(sx * 495 + 30 * Math.cos(q * Math.PI / 3), 400 + 30 * Math.sin(q * Math.PI / 3)); };
+    cluster(-1);
+    if (mirrored) cluster(1);
+    else for (const [x, z] of [[495, 390], [495, -390], [850, 0]]) { add(x - 10, z); add(x + 10, z); }
+    const b = fixtureBase(patches);
+    const set = { Sol: b.cand(0, -495, 0, 0.2), Cent: b.cand(1, 495, 0, 0.2) };
+    const fields = {
+      D: { Sol: b.field(set.Sol), Cent: b.field(set.Cent) }, owner: b.splitOwner(), sides: ['Sol', 'Cent'],
+      shares: { Sol: 0.5, Cent: 0.5 }, borders: { 'Sol-Cent': 100 },
+    };
+    const kB = patches.filter(p => p.type === 'Balterium').map(p => p.idx);
+    const plan = {
+      kept: { Balterium: kB, Biotics: [4, 5] }, removed: [], frozen: new Set([0, 1, 2, 3]),
       kit: { Sol: 2, Cent: 2 }, rings: {}, gap: { Balterium: 0, Biotics: 0 },
     };
     return { ctx: b.ctx, set, fields, plan };
@@ -681,7 +857,7 @@
     const sol = b.cand(0, -495, 0, 0.2), alien = Object.assign(b.cand(1, 495, 0, 0.2), { role: 'alien' });
     const set = { Sol: sol, Cent: sol, Alien: alien };
     const fields = {
-      D: { Sol: b.field(sol), Cent: b.field(sol), Alien: b.field(alien) }, owner: new Int8Array(b.n * b.n),
+      D: { Sol: b.field(sol), Cent: b.field(sol), Alien: b.field(alien) }, owner: b.splitOwner(), sides: ['Sol', 'Alien'],
       shares: { Sol: 0.5, Cent: 0.5, Alien: 0.5 }, borders: { 'Sol-Alien': 100 },
     };
     const kB = [0, 1], kO = patches.slice(2).map(p => p.idx);
@@ -693,14 +869,27 @@
   }
 
   /**
-   * Flat 2 km map for the fixtures: scan 15 m, extent 1000, all masks valid; cand(id, x, z, E)
-   * builds a human candidate, field(c) its Euclidean field on the 101 grid.
+   * Flat 2 km map for the fixtures: scan 15 m, extent 1000, all masks valid (every control cell
+   * hqOk); cand(id, x, z, E) builds a human candidate, field(c) its Euclidean field on the 101
+   * grid, splitOwner() the owner array of a West (0) / East (1) split at x = 0.
    */
   function fixtureBase(patches) {
     const extent = 1000, step = 15, w = 133, minX = -990, maxZ = 990;
     const ones = new Uint8Array(w * w).fill(1);
-    const n = 101, cell = 2 * extent / 100;
-    const ctrl = { n, cell, minX: -extent, maxZ: extent, h: new Float32Array(n * n), playable: new Uint8Array(n * n).fill(1) };
+    const n = 101, N = n * n, cell = 2 * extent / 100;
+    const cx = new Float32Array(N), cz = new Float32Array(N);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) { cx[j * n + i] = -extent + (i + 0.5) * cell; cz[j * n + i] = extent - (j + 0.5) * cell; }
+    }
+    const patchDist = patches.map(p => {
+      const d = new Float32Array(N);
+      for (let c = 0; c < N; c++) d[c] = Math.hypot(cx[c] - p.x, cz[c] - p.z);
+      return d;
+    });
+    const ctrl = {
+      n, cell, minX: -extent, maxZ: extent, h: new Float32Array(N), playable: new Uint8Array(N).fill(1),
+      hqOk: new Uint8Array(N).fill(1), cx, cz, patchDist,
+    };
     const ctx = {
       map: 'Fixture', baseMap: 'Fixture', extent, scan: { minX, maxZ, step, w, h: w },
       masks: { hqSol: ones, hqCent: ones, refSol: ones, refCent: ones }, heights: null,
@@ -722,13 +911,19 @@
       patches.forEach((p, k) => { f[info.cells[k]] = Math.hypot(p.x - c.x, p.z - c.z); });
       return f;
     };
-    return { ctx, n, cand, field };
+    const splitOwner = () => {
+      const o = new Int8Array(N);
+      for (let c = 0; c < N; c++) o[c] = cx[c] < 0 ? 0 : 1;
+      return o;
+    };
+    ctrl.patchCell = ctxInfo(ctx).cells;
+    return { ctx, n, cand, field, splitOwner };
   }
 
   return {
     PRESENTATION_BAR, HUMAN_FOOTPRINT, HARVEST_RATE, DEFAULT_AMOUNTS,
     registry, evaluate, cheap, cheapGeom, cheapT2, lowerBound,
-    sidesOf, pairsOf, squeeze3, t1Of, t4Of, softTotals, softShares, balance,
+    sidesOf, pairsOf, squeeze3, t1Of, t4Of, t6Of, g5Of, expansionParams, softTotals, softShares, balance,
     humanCellOk, alienCellOk, placementOk, ctxInfo,
     selftest, metrics_selftest: selftest,
   };

@@ -22,7 +22,10 @@
       enemyDistance: Math.min(2700, Math.max(1300, 0.9 * ext)),
       counts: { balterium: Math.round(0.75 * nB), biotics: Math.round(0.75 * nO) },
       minKit: 3, minKitAlien: 4, kitCap: null,
-      weights: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1 },
+      // spec 12.2: T5 removed, T6 expansion balance added, T2/T3 halved
+      weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 },
+      // spec 12.1/12.8: K expansion HQs, cells within reach * R_c, T6 weights per k
+      expansion: { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] },
       exposure: { overlook: 0.5, highground: 0.3, openness: 0.2, weight: 1.0 },
       exposureCut: 0.75,
       controlModel: 'geodesic', slopeCost: { k: 1.0, s0: 0.25, sMax: 0.7 },

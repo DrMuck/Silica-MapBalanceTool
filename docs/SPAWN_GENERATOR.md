@@ -463,3 +463,146 @@ with the dead annulus, the 5-level relaxation ladder, lock-placed-HQs, the resea
 M4 (resource safety; can return via plug-in B), M7 (entrances) and M8 (AI validation).
 Reason: the user asked to keep it simple; T2 (soft-Voronoi resources over control) covers what
 the zoning terms were for, and the coverage fill covers what fillers were for.
+
+## 12. Expansion layer fairness (design round 3, 2026-10-31)
+
+**Finding.** The starting kit (G3) is equal, but the first expansion layer is not: in Davey's
+NarakaCity layout the best single expansion HQ grabs 7 Balterium for Sol and 14 for Cent
+(10/10 at the start); several of our own hvh top-1 layouts show 9/3 (RiftBasin), 10/6
+(NarakaCity), 5/9 (CrimsonPeak). No existing term measures what an expansion HQ can actually
+reach: T5's one-hop annulus includes enemy ground and ignores HQ validity and clustering;
+T2/T3 weigh all territory alike. User view: the first expansion layer matters more than
+overall control, deeper layers much less; players build 1-3 expansion HQs at once; patch
+density within an HQ's build radius matters; keep the model simple and robust.
+
+### 12.1 Model: the expansion curve V(k)
+
+For human i with spawn s_i, after the patch plan:
+
+- **Own side** of a patch or control cell = its geodesic Voronoi owner is i (`fields.owner`,
+  section 2.3); in hvhva the Alien region therefore blocks both human layers (the alien
+  expands by node lines and is not modelled further). Euclidean fallback when no fields:
+  nearer to s_i than to any other spawn.
+- **Expansion cells** C_i = control cells c with `ctrl.hqOk[c]` (centre scan cell and its 8
+  neighbours valid on `hq_Sol ∧ hq_Cent`, i.e. valid for both factions because of the swap),
+  `d(c, s_i) ≤ expReach · R_c` (Euclidean, the game's chain rule; `expReach` default 0.85 = replay p75-p90 of first-hop distance, see Si_MapBalance/analysis/expansion_2026-10-31/NOTES.md) and
+  owner(c) = i.
+- **Grab set** of a cell: kept Balterium within `R_b` of the cell centre, on i's side, and not
+  inside the kit (`d(r, s_i) > R_b`).
+- **Curve**: greedy maximum coverage, `V_i(k)` = patches grabbed by the best k expansion cells
+  chosen one after another, k = 1..K, `K = 3` (default; the replay study sets K and `expReach`,
+  nothing else). `V_i(1)` is the density of the best cluster, `V_i(K)` the breadth of the layer.
+
+Why this and not more: one curve per side with two data-settable parameters captures both
+things the user named (density and the 1-3 HQ layer), uses only inputs we already compute, is
+monotone and cheap, and degenerates gracefully. **Small maps:** one HQ saturates the layer, so
+V(1) = V(K) = the own-side layer count and the gates reduce to layer equality. **Large maps:**
+the curve rises over k and the gates compare the first cluster and the three-HQ breadth
+separately. **hvhva:** both humans are compared pairwise with the Alien as blocker. **hva:** one
+human, the curve is reported only. Whole-layer totals (every own-side patch within
+`R_c + R_b`) are reported but not scored: beyond K HQs the user says it matters little.
+
+### 12.2 Gates and terms
+
+| id | rule | modes |
+|---|---|---|
+| G5 expansion | `abs(V_Sol(1) − V_Cent(1)) ≤ 1` and `abs(V_Sol(K) − V_Cent(K)) ≤ 2` | hvh, hvhva |
+| T6 expansion balance (soft) | `(1 − Σ_k w_k · min_i V_i(k) / max_i V_i(k)) / 0.10`, k = 1..K, `w = (0.45, 0.35, 0.20)` = the share of top-20 team-rounds with ≥ k first-hop HQs (89/68/40 %, normalised); ratio 1 when both are 0 | hvh, hvhva |
+
+Changes to the existing terms so the total stays at five soft terms:
+
+- **T5 removed.** Its ring component is superseded by T6; its kit-amount parity is always 0
+  with uniform amounts; its nearest-patch ratio adds nothing the kit gate does not.
+- **T2 default weight 0.5, T3 default weight 0.5** (all components, incl. the hvhva border and
+  squeeze softness; the squeeze hard gate G2 is unchanged). The first layer outranks overall
+  control, as the user said.
+- Terms: T1 separation, T2 resources over control, T3 control balance, T4 exposure, T6 expansion.
+- Stage-1 proxy: `abs(V1_solo(Sol) − V1_solo(Cent)) · expansion.proxy`, where `V1_solo(c)` is
+  the best single expansion cell for candidate c ignoring the enemy (vanilla Balterium outside
+  `R_b`, cells within `expReach·R_c`), precomputed per candidate. **Default `proxy = 0`**
+  (implementation round: at 0.5 the enemy-blind value pushed better sets out of the shortlist,
+  equal or worse top-1 on 38/39 rows and a gap failure on GreatErg hvhva, while G5 and the
+  min/max targets were met either way). `V1_solo` stays precomputed and the weight settable.
+
+### 12.3 Patch selection: layer cap in the coverage fill
+
+After the kit step nothing in the layer is kept yet, so the coverage fill decides the layer.
+Add a cap to the Balterium fill (section 4 step 3): a pick that lies on human i's side within
+`expReach·R_c + R_b` of s_i is **inadmissible** while `layer_i ≥ layer_j + 2` for the other
+human j (hvhva: for any other human). When the patch nearest to the farthest cell `c*` is
+inadmissible, take the nearest admissible patch to `c*`; if none exists, take the nearest
+anyway (coverage wins, G5 may fail and the search moves on). Paired adds inside the kits are
+unchanged. Cost O(1) per trial (owner lookup + distance). `V(1)` itself is not enforced in the
+fill: with a coverage-driven fill one side rarely gets a dense cluster the other lacks, and
+the search optimises it through G5/T6.
+
+### 12.4 Performance
+
+Once per map and `R_b` (`GenExpansion.prepare`, cached in `ctx.cache`): for every control cell
+with `ctrl.hqOk`, the Uint16 list of Balterium patch indices within `R_b` of its centre
+(≤ 10 201 cells × ≤ 90 patches ≈ 1 M distance checks, < 20 ms). Per set: for each human the
+cells within `expReach·R_c` with owner = i (≤ ~5 k on 6 km maps), K greedy passes over their
+lists with a `got` bitset over patches: ≈ 0.3 ms per set, ≈ 50 ms for 150 stage-2 sets plus the
+refinement evaluations. `V1_solo` per candidate: one pass of the same lists, ≤ 250 candidates.
+Budget stays well under the 3 s target.
+
+### 12.5 Interfaces (new module `js/gen/expansion.js`)
+
+```
+GenExpansion.prepare(ctx, settings) → ctx.exp = { cover: Array<Uint16Array|null> /* per ci; null = no valid HQ */, Rb }
+GenExpansion.curve(ctx, settings, spawn: Candidate, sideIndex: number, fields: Fields|null, keptBalt: Uint8Array /* per patch k */, K) →
+    { V: number[K], cells: number[K] /* chosen ci or -1 */, layer: number /* own-side kept Balterium outside R_b within expReach·R_c + R_b */ }
+GenExpansion.solo(ctx, settings, cand) → number                     // V1 ignoring enemies, vanilla patches
+GenSettings additions: expansion: { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20], proxy: 0 }; weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 }  (T5 gone)
+PatchPlan additions: layer: {[role]: number}; Evaluation.metrics additions: expansion: {[role]: {V: number[], cells: [{x,z}], layer}}, expansionRatio: number[]
+ctrl addition (grid.js): hqOk: Uint8Array per control cell
+```
+
+### 12.6 Acceptance (harness)
+
+- New harness mode `node tools/gen_harness.js --layout <file.json> [--layout ...]`: evaluates an
+  existing layout (spawns + removed_patches, radii from its `settings`) with
+  `GenMetrics.evaluate` and prints gates, terms and the curve. **Davey's NarakaCity layout must
+  fail G5** (V(1) 7 vs 14) and show T6 > 3.
+- Report columns per row: `V(1..K)` per human, `layer` per human, `min/max` at k = 1 and k = K.
+- Target: `min/max ≥ 0.85` at k = 1 and at k = K on ≥ 11 of 13 hvh maps for the top-1; G5 holds
+  on every hvh/hvhva top-1 where any set passes it (the fallback lists the failure otherwise).
+- Unchanged: gates G1-G4 39/39, 5 results per row, determinism 39/39, gap check 39/39, `ms ≤ 3000`.
+- Selftests: synthetic fixture where Sol has one cluster of 6 within `R_b` of one valid cell
+  and Cent has 6 spread over three cells → V_Sol = [6,6,6], V_Cent = [2,4,6],
+  T6 = (1 − (0.45·1/3 + 0.35·2/3 + 0.20·1))/0.10 = 4.167; the layer cap keeps `abs(Δlayer) ≤ 2` on 13 maps × 3
+  fixed sets unless the pool runs dry (report).
+
+### 12.7 Tasks (two executors, disjoint files)
+
+**E1 model** — owns `js/gen/expansion.js` (new), `js/gen/grid.js` (`ctrl.hqOk`), `js/gen/patches.js`
+(layer cap, `plan.layer`), `js/gen/model_selftest.js`, `js/gen/context.js` (settings defaults
+`expansion`, `weights` without T5). Verify: selftest fixture above, `prepare` ≤ 20 ms per map,
+`curve` ≤ 0.5 ms per set on GreatErg (print), layer cap check on 13 × 3 fixed sets.
+
+**E2 scoring, harness, UI** — owns `js/gen/metrics.js` (G5, T6, remove T5, weights, stage-1
+proxy, `metrics.expansion`), `js/gen/candidates.js` (`V1_solo` per candidate via
+`GenExpansion.solo`), `js/gen/layout.js` (metadata passthrough), `tools/gen_harness.js`
+(`--layout` mode, curve columns, acceptance checks), `js/generator_ui.js` + `index.html`
+(curve `V_Sol/V_Cent` per result row, weight inputs follow the registry). E2 develops against
+the §12.5 signatures with a stub until E1 lands; the final run needs E1. Verify: §12.6.
+
+Order: E1 ∥ E2, then one harness run, then manager review.
+
+### 12.8 Outcome (implemented 2026-10-31)
+
+Davey's NarakaCity layout fails G5 (V 7/11/13 vs 12/17/19, T6 3.74); G5 passes on 26/26
+hvh/hvhva top-1; min/max ≥ 0.85 at k = 1 and k = K on 13/13 hvh top-1 (3/13 before); G1-G4,
+5 results, determinism and gap check 39/39; slowest run 1.1 s. Also: the UI hides gate chips
+that do not apply to the mode; `--layout` uses the map's default d* and the layout's kept
+totals as counts; the plan cache key includes the layer zones.
+
+### 12.9 Parameters from the replay study (`Si_MapBalance/analysis/expansion_2026-10-31/NOTES.md`)
+
+324 rounds, 377 top-20 team-rounds, 973 first-hop HQs, current radii era (chain 2500, build
+~1000). HQs alive (HvH, median): 1 at 10 min, 2 at 15, 3 at 20-30; first-hop HQs per team-round
+median 2 [1-4], ≥ 1/2/3 in 89/68/40 %; anchor distance median 0.67 × chain, p90 0.92; a first-hop
+HQ opens 5 [3-7] new Balterium against a greedy best of 10 [9-12]. Taken over: **K = 3**,
+**expReach = 0.85**, **T6 weights 0.45/0.35/0.20**. Not taken: a lower placement bound (cells
+near the spawn grab little because kit patches are excluded) and the "half of greedy" scale (a
+constant factor does not change ratios).

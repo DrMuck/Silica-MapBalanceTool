@@ -248,6 +248,8 @@
       const kA = Math.min(inside.length, Patches().alienKitCap(want, hs.length));
       parts.push('A:' + order('Alien', c, inside).slice(0, kA).map(o => o.k).join(','));
     }
+    // the layer cap (spec 12.3) reads each human's layer zone, so the plan depends on it too
+    if (hs.length > 1) parts.push('Z:' + Patches().layerZones(ctx, s, set, fields).join(','));
     return parts.join('|');
   }
 

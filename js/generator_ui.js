@@ -10,12 +10,13 @@ const GeneratorUI = (() => {
   const ROLE_CSS = { Sol: 'sol', Cent: 'cent', Alien: 'alien' };
   const DEFAULT_GATES = [
     { id: 'G1', label: 'placement' }, { id: 'G2', label: 'separation' },
-    { id: 'G3', label: 'starting kit' }, { id: 'G4', label: 'budget' },
+    { id: 'G3', label: 'starting kit' }, { id: 'G4', label: 'budget' }, { id: 'G5', label: 'expansion' },
   ];
+  // fallbacks only; the live lists come from GenMetrics.registry
   const DEFAULT_TERMS = [
-    { id: 'T1', label: 'separation', weight: 1 }, { id: 'T2', label: 'resources over control', weight: 1 },
-    { id: 'T3', label: 'control balance', weight: 1 }, { id: 'T4', label: 'exposure', weight: 1 },
-    { id: 'T5', label: 'kit softness', weight: 1 },
+    { id: 'T1', label: 'separation', weight: 1 }, { id: 'T2', label: 'resources over control', weight: 0.5 },
+    { id: 'T3', label: 'control balance', weight: 0.5 }, { id: 'T4', label: 'exposure', weight: 1 },
+    { id: 'T6', label: 'expansion balance', weight: 1 },
   ];
   const PRESENTATION_BAR = (typeof GenMetrics !== 'undefined' && GenMetrics.PRESENTATION_BAR) || 3.0;
   const BAR_WARNING = `above ${PRESENTATION_BAR.toFixed(1)}: geometry limits fairness on this map`;
@@ -272,6 +273,34 @@ const GeneratorUI = (() => {
     return parts.join(' · ');
   }
 
+  /**
+   * Expansion curve V(k) per human (spec 12.1): a small line chart (Sol blue, Cent red; hva one
+   * human line) plus the values and min/max at k = 1 and k = K.
+   */
+  function expansionLine(ev, mode) {
+    const ex = (ev.metrics || {}).expansion;
+    if (!ex) return '';
+    const keys = ['Sol', 'Cent'].filter(k => ex[k] && Array.isArray(ex[k].V));
+    if (!keys.length) return '';
+    const K = ex[keys[0]].V.length;
+    let vmax = 1;
+    for (const k of keys) for (const v of ex[k].V) if (v > vmax) vmax = v;
+    const W = 54, H = 18, P = 2;
+    const xy = (v, i) => `${(P + (K > 1 ? i * (W - 2 * P) / (K - 1) : (W - 2 * P) / 2)).toFixed(1)},${(H - P - v * (H - 2 * P) / vmax).toFixed(1)}`;
+    const lines = keys.map(k => `<polyline points="${ex[k].V.map(xy).join(' ')}" fill="none" ` +
+      `stroke="rgb(${ROLE_RGB[k].join(',')})" stroke-width="1.5"/>`).join('');
+    const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle;margin-right:4px;` +
+      `background:rgba(255,255,255,0.06);border-radius:2px;">${lines}</svg>`;
+    const lab = k => (mode === 'hva' ? 'H' : k[0]);
+    const vals = keys.map(k => `${lab(k)} ${ex[k].V.join('/')}`).join(' · ');
+    const r = (ev.metrics || {}).expansionRatio;
+    const ratio = Array.isArray(r) && r.length ? ` · min/max ${fmt(r[0])}/${fmt(r[r.length - 1])}` : '';
+    const layer = keys.map(k => ex[k].layer).join('/');
+    const title = `Expansion curve V(k): Balterium the best 1..${K} expansion HQs can grab per human (own side, outside the kit); ` +
+      `layer ${layer}` + (ratio ? '; min/max at k = 1 and k = K' : '');
+    return `<span title="${title}">${svg}V ${vals}${ratio}</span>`;
+  }
+
   function renderResults(wallMs) {
     const box = $('gen-results');
     box.innerHTML = '';
@@ -287,7 +316,8 @@ const GeneratorUI = (() => {
       return;
     }
 
-    const gates = registryEntries('hard');
+    // only the gates of this mode (G5 is hvh / hvhva only)
+    const gates = registryEntries('hard').filter(g => !Array.isArray(g.modes) || g.modes.includes(settings.mode));
     const terms = registryEntries('soft');
     cands.forEach((ev, i) => {
       const fails = ev.gateFails || [];
@@ -316,6 +346,7 @@ const GeneratorUI = (() => {
         `<div class="gen-row-head"><b>#${ev.rank || i + 1}</b><span class="gen-score">score ${fmt(ev.score)}</span>` +
         `<span class="gen-gates">${gateHtml}</span></div>` +
         `<div class="gen-row-sub">${sharesGapLine(ev, settings.mode)}</div>` +
+        `<div class="gen-row-sub gen-row-exp">${expansionLine(ev, settings.mode)}</div>` +
         (above && !fails.length ? `<div class="gen-row-warntext">${BAR_WARNING}</div>` : '') +
         `<div class="gen-terms">${termHtml}</div>` +
         `<div class="gen-metrics">${metricsLine(ev, settings.mode)}</div>` +

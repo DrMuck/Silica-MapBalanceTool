@@ -10,7 +10,7 @@
   'use strict';
 
   const Rng = () => RngMod || root.GenRng;
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';   // 1.1.0: G5 / T6 expansion layer (spec 12), _meta.generator.expansion
   const MODES = ['hvh', 'hva', 'hvhva'];
   const DEFAULT_AMOUNTS = { balterium: 40000, biotics: 42000 };
   // alien chain ranges are not generator settings; the tool's slider defaults
@@ -36,6 +36,23 @@
   }
 
   function round3(v) { return typeof v === 'number' && isFinite(v) ? Math.round(v * 1000) / 1000 : v; }
+
+  /**
+   * Expansion summary (spec 12.5) from evaluation.metrics: parameters, V(k) and layer per human,
+   * min/max per k (null in hva), chosen cells. null when the evaluation carries no curves.
+   */
+  function expansionMeta(settings, metrics) {
+    const ex = metrics && metrics.expansion;
+    if (!ex || !Object.keys(ex).length) return null;
+    const e = settings.expansion || {};
+    const out = { K: e.K || 3, reach: e.reach || 0.85, w: e.w || [0.45, 0.35, 0.20], V: {}, layer: {}, cells: {}, ratio: metrics.expansionRatio || null };
+    for (const k of Object.keys(ex)) {
+      out.V[k] = (ex[k].V || []).slice();
+      out.layer[k] = ex[k].layer;
+      out.cells[k] = (ex[k].cells || []).slice();
+    }
+    return out;
+  }
 
   /**
    * build(ctx, settings, evaluation, rank, amounts, extra?) -> layout JSON.
@@ -92,6 +109,7 @@
           gateFails: (evaluation.gateFails || []).slice(),
           terms: Object.fromEntries(Object.entries(evaluation.terms || {}).map(([k, v]) => [k, round3(v)])),
           metrics: evaluation.metrics || {},
+          expansion: expansionMeta(settings, evaluation.metrics),
           stats: ex.stats || null,
         },
       },

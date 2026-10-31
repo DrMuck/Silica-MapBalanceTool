@@ -1,19 +1,21 @@
 // T2 model self-test (spec section 9, T2 "Verify"). UMD, DOM-free, no I/O: the caller (the T5
 // harness, or a throwaway node script) builds GenRaw objects from disk and passes them in.
 //
-//   GenModelSelftest.synthetic()      -> {ok, results}        flat/wall grids, timing, Voronoi
-//   GenModelSelftest.map(raw)         -> {ok, results, summary}  candidates + 3 plan sets
+//   GenModelSelftest.synthetic()      -> {ok, results}        flat/wall grids, timing, Voronoi,
+//                                                              expansion-curve fixture (spec 12.6)
+//   GenModelSelftest.map(raw)         -> {ok, results, summary}  candidates + 3 plan sets, layer
+//                                                              cap, expansion prepare/curve timing
 //   GenModelSelftest.run(raws)        -> {ok, results}        synthetic() + map(raw) for each
 // results = [{name, ok, detail}] like Terrain.selftest().
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory(require('../terrain.js'), require('./rng.js'), require('./context.js'),
-      require('./grid.js'), require('./candidates.js'), require('./patches.js'));
+      require('./grid.js'), require('./candidates.js'), require('./patches.js'), require('./expansion.js'));
   } else {
     root.GenModelSelftest = factory(root.Terrain, root.GenRng, root.GenContext, root.GenGrid,
-      root.GenCandidates, root.GenPatches);
+      root.GenCandidates, root.GenPatches, root.GenExpansion);
   }
-}(typeof self !== 'undefined' ? self : this, function (Terrain, GenRng, GenContext, GenGrid, GenCandidates, GenPatches) {
+}(typeof self !== 'undefined' ? self : this, function (Terrain, GenRng, GenContext, GenGrid, GenCandidates, GenPatches, GenExpansion) {
   'use strict';
 
   const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
@@ -93,7 +95,54 @@
     for (let j = 10; j <= 90; j++) c.h[ci(50, j)] = 0;
     GenGrid.resetCache(c);
 
+    results.push(...expansionFixture());
     return { ok: results.every(r => r.ok), results };
+  }
+
+  /**
+   * Spec 12.6 fixture on a flat 8 km map, R_b 1000, R_c 2500, reach 0.85: Sol (-2500, 0) has one
+   * cluster of 6 Balterium around (-900, 0); Cent (2500, 0) has 3 pairs > 2 R_b apart, all 1600 m
+   * out -> V_Sol = [6,6,6], V_Cent = [2,4,6], T6 = (1 - (0.45/3 + 0.35*2/3 + 0.20))/0.10 = 4.167.
+   */
+  function expansionFixture() {
+    const results = [];
+    const add = (name, ok, detail) => results.push({ name: `expansion fixture: ${name}`, ok: !!ok, detail });
+    const raw = flatRaw(4000, 15);
+    raw.mapName = 'SyntheticExpansion';
+    const res = [];
+    const put = (x, z) => res.push({ idx: res.length, type: 'Balterium', x, z, y: 0, resources_max: 40000, world_w: 40, world_h: 40 });
+    for (const [dx, dz] of [[0, 0], [50, 0], [-50, 0], [0, 50], [0, -50], [35, 35]]) put(-900 + dx, dz);
+    for (const [gx, gz] of [[2500, 1600], [2500, -1600], [900, 0]]) { put(gx - 30, gz); put(gx + 30, gz); }
+    raw.resources = { resources: res };
+    const settings = GenContext.defaultSettings(raw, { counts: { balterium: 1e9, biotics: 1e9 } });
+    const ctx = GenContext.build(raw, settings);
+    const sp = (x, z) => ({ x, z, ci: GenGrid.cellOf(ctx, x, z) });
+    const set = { Sol: sp(-2500, 0), Cent: sp(2500, 0) };
+    const F = GenGrid.fields(ctx, settings, set, new Map());
+    const plan = GenPatches.plan(ctx, settings, set, F);
+    const keptB = new Uint8Array(ctx.patches.length);
+    const keptIdx = new Set(plan.kept.Balterium);
+    ctx.patches.forEach((p, k) => { keptB[k] = keptIdx.has(p.idx) ? 1 : 0; });
+    const K = settings.expansion.K, cv = {};
+    for (const r of ['Sol', 'Cent']) cv[r] = GenExpansion.curve(ctx, settings, set[r], F.sides.indexOf(r), F, keptB, K);
+    const eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+    add('V_Sol = [6,6,6], V_Cent = [2,4,6]', eq(cv.Sol.V, [6, 6, 6]) && eq(cv.Cent.V, [2, 4, 6]),
+      { Sol: cv.Sol.V, Cent: cv.Cent.V, cellsSol: cv.Sol.cells, cellsCent: cv.Cent.cells });
+    const w = settings.expansion.w;
+    let acc = 0;
+    for (let k = 0; k < K; k++) {
+      const a = cv.Sol.V[k], b = cv.Cent.V[k], mx = Math.max(a, b);
+      acc += w[k] * (mx ? Math.min(a, b) / mx : 1);
+    }
+    const t6 = (1 - acc) / 0.10;
+    add('T6 from the curve = 4.167', Math.abs(t6 - 25 / 6) < 0.001, Math.round(t6 * 1000) / 1000);
+    add('layer 6/6, plan.layer = curve layer', cv.Sol.layer === 6 && cv.Cent.layer === 6
+      && plan.layer.Sol === 6 && plan.layer.Cent === 6, { curve: [cv.Sol.layer, cv.Cent.layer], plan: plan.layer });
+    const eu = ['Sol', 'Cent'].map(r => GenExpansion.curve(ctx, settings, set[r], -1, null, keptB, K, [set[r === 'Sol' ? 'Cent' : 'Sol']]).V);
+    add('no fields: Euclidean own side gives the same curves', eq(eu[0], cv.Sol.V) && eq(eu[1], cv.Cent.V), eu);
+    const so = [GenExpansion.solo(ctx, settings, set.Sol), GenExpansion.solo(ctx, settings, set.Cent)];
+    add('solo V1: Sol 6, Cent 2', so[0] === 6 && so[1] === 2, so);
+    return results;
   }
 
   // ── real-map checks ───────────────────────────────────────────────────
@@ -190,6 +239,15 @@
     summary.msField = timeStats(i => GenGrid.field(ctx, base, H[i % H.length].ci), 30);
     add('field time <= 5 ms (real map, p10 of 30)', summary.msField.p10 <= 5, summary.msField);
 
+    // expansion (spec 12.4): prepare once per map and R_b, <= 20 ms
+    const hqOk = ctx.ctrl.hqOk;
+    let nOk = 0, okOff = 0;
+    for (let q = 0; q < hqOk.length; q++) if (hqOk[q]) { nOk++; if (!ctx.ctrl.playable[q]) okOff++; }
+    add('ctrl.hqOk: valid HQ cells exist, all playable', nOk > 0 && !okOff, { hqOk: nOk, notPlayable: okOff });
+    const Rb0 = base.radii.build;
+    summary.msExpPrepare = timeStats(() => { ctx.exp = null; ctx.cache.delete('exp|' + Rb0); GenExpansion.prepare(ctx, base); }, 11);
+    add('expansion prepare <= 20 ms (p10 of 11)', summary.msExpPrepare.p10 <= 20, summary.msExpPrepare);
+
     // plans on 3 fixed sets
     const sets = pickSets(ctx, base, H, A);
     summary.plans = {};
@@ -257,6 +315,26 @@
           { gap: info.gap, vanilla: info.gapVanilla, limit: gapLimit });
       }
       add(`${mode}: plan time <= 2 ms (p10 of 51)`, ms.p10 <= 2, info.ms);
+
+      // expansion curve per human (spec 12.1) and the layer cap (spec 12.3)
+      const keptB = new Uint8Array(P.length), keptIdx = new Set(plan.kept.Balterium);
+      P.forEach((p, k) => { keptB[k] = keptIdx.has(p.idx) ? 1 : 0; });
+      const K = settings.expansion.K, cv = {};
+      const curves = () => { for (const r of humans) cv[r] = GenExpansion.curve(ctx, settings, set[r], F.sides.indexOf(r), F, keptB, K); };
+      curves();
+      info.expansion = Object.fromEntries(humans.map(r => [r, { V: cv[r].V, layer: cv[r].layer }]));
+      info.layerCap = plan.layerCap;
+      add(`${mode}: plan.layer = curve layer`, humans.every(r => plan.layer[r] === cv[r].layer),
+        { plan: plan.layer, curve: humans.map(r => cv[r].layer) });
+      info.msCurve = timeStats(curves, 51);
+      add(`${mode}: expansion curve <= 0.5 ms per set (all humans, p10 of 51)`, info.msCurve.p10 <= 0.5, info.msCurve);
+      if (humans.length > 1) {
+        const dl = Math.abs(plan.layer.Sol - plan.layer.Cent);
+        if (dl <= 2) add(`${mode}: layer cap |layer Sol - layer Cent| <= 2`, true, { layer: plan.layer, cap: plan.layerCap });
+        else if (plan.layerCap.forced > 0) {
+          add(`info (report-only): ${mode}: |dlayer| ${dl} > 2, admissible pool ran dry`, true, { layer: plan.layer, cap: plan.layerCap });
+        } else add(`${mode}: layer cap |layer Sol - layer Cent| <= 2`, false, { layer: plan.layer, cap: plan.layerCap });
+      }
     }
     return { ok: results.every(r => r.ok), results, summary };
   }
