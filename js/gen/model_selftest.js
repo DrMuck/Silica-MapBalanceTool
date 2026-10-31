@@ -2,7 +2,8 @@
 // harness, or a throwaway node script) builds GenRaw objects from disk and passes them in.
 //
 //   GenModelSelftest.synthetic()      -> {ok, results}        flat/wall grids, timing, Voronoi,
-//                                                              expansion-curve fixture (spec 12.6)
+//                                                              expansion-curve fixture (spec 12.6),
+//                                                              exact-kit fixtures (spec 13.8)
 //   GenModelSelftest.map(raw)         -> {ok, results, summary}  candidates + 3 plan sets, layer
 //                                                              cap, expansion prepare/curve timing
 //   GenModelSelftest.run(raws)        -> {ok, results}        synthetic() + map(raw) for each
@@ -96,6 +97,7 @@
     GenGrid.resetCache(c);
 
     results.push(...expansionFixture());
+    results.push(...exactKitFixtures());
     return { ok: results.every(r => r.ok), results };
   }
 
@@ -143,6 +145,90 @@
     const so = [GenExpansion.solo(ctx, settings, set.Sol), GenExpansion.solo(ctx, settings, set.Cent)];
     add('solo V1: Sol 6, Cent 2', so[0] === 6 && so[1] === 2, so);
     return results;
+  }
+
+  /**
+   * Spec 13.8 fixtures on a flat 6 km map (R_b 1000, R_n 1200): Sol (-1800, 0) and Cent
+   * (1800, 0) have 4 Balterium each within R_b, the Nest (0, 1800) 6 Biotics within R_n, plus 10
+   * Balterium and 4 Biotics on a ring of radius 2600. Requested totals are below vanilla, so the
+   * auto plan may pair-add inside the radii.
+   * 1. kitExact 2 (hvh and hvhva sets): kit 2/2, no paired adds, no failures, exactly 2 kept per
+   *    radius; kitExact 5 > 4 reachable -> failures ['kit_exact']; nestKitExact 2 -> Nest kit 2
+   *    and the other 4 Biotics inside R_n removed.
+   * 2. GenSearch.run with kitExact 8 (budget 16 <= total, but no spot reaches 8) ->
+   *    infeasible 'kit_candidates', no exception, candidates [], kitRange.humanMax < 8.
+   */
+  function exactKitFixtures() {
+    const results = [];
+    const add = (name, ok, detail) => results.push({ name: `exact-kit fixture: ${name}`, ok: !!ok, detail });
+    const raw = flatRaw(3000, 15);
+    raw.mapName = 'SyntheticExactKit';
+    const res = [];
+    const put = (type, x, z) => res.push({ idx: res.length, type, x, z, y: 0, resources_max: type === 'Balterium' ? 40000 : 42000, world_w: 40, world_h: 40 });
+    for (const [dx, dz] of [[300, 0], [0, 450], [-500, 100], [200, -650]]) { put('Balterium', -1800 + dx, dz); put('Balterium', 1800 - dx, dz); }
+    for (const [dx, dz] of [[300, 0], [-300, 0], [0, 400], [0, -500], [600, 300], [-700, -200]]) put('Biotics', dx, 1800 + dz);
+    for (let q = 0; q < 10; q++) { const a = (q + 0.5) * Math.PI / 5; put('Balterium', 2600 * Math.cos(a), 2600 * Math.sin(a)); }
+    for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2 + Math.PI / 4; put('Biotics', 2600 * Math.cos(a), 2600 * Math.sin(a)); }
+    raw.resources = { resources: res };
+    const base = { counts: { balterium: 12, biotics: 6 } };
+    const settings = GenContext.defaultSettings(raw, base);
+    const ctx = GenContext.build(raw, settings);
+    const sp = (x, z) => {
+      const c = { x, z, ci: GenGrid.cellOf(ctx, x, z), pd: new Float32Array(ctx.patches.length) };
+      ctx.patches.forEach((p, k) => { c.pd[k] = Math.hypot(p.x - x, p.z - z); });
+      return c;
+    };
+    const set = { Sol: sp(-1800, 0), Cent: sp(1800, 0) };
+    const set3 = Object.assign({ Alien: sp(0, 1800) }, set);
+    const within = (plan, c, type, R) => ctx.patches.filter((p, k) => p.type === type && c.pd[k] <= R && plan.kept[type].includes(p.idx)).length;
+    const s2 = GenContext.defaultSettings(raw, Object.assign({ kitExact: 2 }, base));
+    const F = GenGrid.fields(ctx, s2, set, new Map());
+    const auto = GenPatches.plan(ctx, settings, set, F);
+    const p2 = GenPatches.plan(ctx, s2, set, F);
+    add('auto plan on the fixture (reference)', true, { kit: auto.kit, paired: auto.paired, kitK: auto.kitK });
+    add('kitExact 2 (hvh): kit 2/2, kept within R_b 2/2, no paired adds, no failures',
+      p2.kit.Sol === 2 && p2.kit.Cent === 2 && within(p2, set.Sol, 'Balterium', 1000) === 2 && within(p2, set.Cent, 'Balterium', 1000) === 2
+      && p2.paired === 0 && Array.isArray(p2.failures) && !p2.failures.length && p2.kept.Balterium.length === 12,
+      { kit: p2.kit, paired: p2.paired, failures: p2.failures, kept: p2.kept.Balterium.length });
+    const p5 = GenPatches.plan(ctx, GenContext.defaultSettings(raw, Object.assign({ kitExact: 5 }, base)), set, F);
+    add('kitExact 5 > 4 reachable: failures [kit_exact], kit stays 4/4', p5.failures.join() === 'kit_exact' && p5.kit.Sol === 4 && p5.kit.Cent === 4,
+      { kit: p5.kit, failures: p5.failures });
+    const s3 = GenContext.defaultSettings(raw, Object.assign({ mode: 'hvhva', kitExact: 2, nestKitExact: 2 }, base));
+    const F3 = GenGrid.fields(ctx, s3, set3, new Map());
+    const p3 = GenPatches.plan(ctx, s3, set3, F3);
+    const bioIn = ctx.patches.filter((p, k) => p.type === 'Biotics' && set3.Alien.pd[k] <= 1200).map(p => p.idx);
+    add('nestKitExact 2 (hvhva): Nest kit 2, the other 4 Biotics inside R_n removed, human kit 2/2, no paired adds',
+      p3.kit.Alien === 2 && bioIn.length === 6 && bioIn.filter(i => p3.removed.includes(i)).length === 4
+      && p3.kit.Sol === 2 && p3.kit.Cent === 2 && p3.paired === 0 && !p3.failures.length,
+      { kit: p3.kit, bioInside: bioIn.length, failures: p3.failures, paired: p3.paired });
+    // nest_total (spec 13.5): 10 Biotics, 6 inside R_n; m = 2 removes the other 4, so at most
+    // 6 can be kept -> a request of 8 runs the pool dry
+    const sT = GenContext.defaultSettings(raw, { mode: 'hvhva', kitExact: 2, nestKitExact: 2, counts: { balterium: 12, biotics: 8 } });
+    const pT = GenPatches.plan(ctx, sT, set3, F3);
+    add('nestKitExact 2 with 8 Biotics requested: failures [nest_total], achievable 6, kit still 2/2/2',
+      pT.failures.join() === 'nest_total' && pT.achievable.Biotics === 6 && pT.kept.Biotics.length === 6 && pT.target.Biotics === 8
+      && pT.kit.Alien === 2 && pT.kit.Sol === 2 && pT.kit.Cent === 2,
+      { failures: pT.failures, achievable: pT.achievable, target: pT.target, kit: pT.kit });
+    const pA = GenPatches.plan(ctx, GenContext.defaultSettings(raw, { mode: 'hvhva', counts: { balterium: 12, biotics: 8 } }), set3, F3);
+    add('auto plan on the same set: no failures key (round-3 shape)', pA.failures === undefined && pA.achievable === undefined, Object.keys(pA));
+    const S = GenSearchMod();
+    if (!S) { add('GenSearch available for the infeasible fixture', false, 'GenSearch not loaded'); return results; }
+    let out = null, err = null;
+    try {
+      const s8 = GenContext.defaultSettings(raw, { kitExact: 8, counts: { balterium: 17, biotics: 6 } });
+      out = S.run(GenContext.build(raw, s8), s8);
+    } catch (e) { err = e && e.stack ? e.stack : String(e); }
+    add('kitExact 8 > any spot -> infeasible kit_candidates, no exception, no results',
+      !err && out && out.infeasible && out.infeasible.reason === 'kit_candidates' && out.candidates.length === 0
+      && out.stats.kitRange && out.stats.kitRange.humanMax < 8,
+      err || { infeasible: out && out.infeasible, kitRange: out && out.stats.kitRange });
+    return results;
+  }
+
+  // GenSearch is not a load-time dependency of this file (it pulls in metrics); looked up on use
+  function GenSearchMod() {
+    if (typeof module === 'object' && module.exports) { try { return require('./search.js'); } catch (e) { return null; } }
+    return (typeof self !== 'undefined' ? self : this).GenSearch || null;
   }
 
   // ── real-map checks ───────────────────────────────────────────────────

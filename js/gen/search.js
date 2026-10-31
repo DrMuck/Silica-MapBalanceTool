@@ -120,33 +120,41 @@
     const M = Met(), mode = s.mode, floor = 0.85 * s.enemyDistance, f2 = floor * floor;
     const K1 = s.stage1Keep || (mode === 'hvhva' ? 150 : 100);
     const pool = new Pool(Math.max(4 * K1, 400));
-    let scored = 0, enumerated = 0, ord = 0;
+    let scored = 0, enumerated = 0, ord = 0, kitRejected = 0;
     const noReject = !!opts.noReject;
-    const offer = (set, ia, ib, ic) => {
+    // exact kits (spec 13): kit screen per human pair / Nest, null in auto mode
+    const ks = kitScreen(ctx, s, mode);
+    const offer = (set, ia, ib, ic, pen) => {
       enumerated++;
       const g = M.cheapGeom(ctx, s, set, opts);
       if (g.reject) return;
       scored++;
-      if (g.partial >= pool.worst()) return;
-      const score = g.partial + M.cheapT2(ctx, s, set);
+      const partial = pen ? g.partial + pen : g.partial;
+      if (partial >= pool.worst()) return;
+      const score = partial + M.cheapT2(ctx, s, set);
       pool.push({ score, ord: ord++, set, key: [ia, ib, ic] });
     };
     const d2 = (p, q) => (p.x - q.x) * (p.x - q.x) + (p.z - q.z) * (p.z - q.z);
+    const nestPen = ks && A.length ? A.map(ks.nest) : null;
 
     if (mode === 'hvh') {
       for (let i = 0; i < H.length; i++) {
         if ((i & 15) === 0 && stop()) throw cancelled();
         for (let j = i + 1; j < H.length; j++) {
           if (!noReject && d2(H[i], H[j]) < f2) continue;
-          offer(makeSet(mode, H[i], H[j]), i, j, -1);
+          let pen = 0;
+          if (ks) { pen = ks.humans([H[i], H[j]]); if (pen === Infinity) { kitRejected++; continue; } }
+          offer(makeSet(mode, H[i], H[j]), i, j, -1, pen);
         }
       }
     } else if (mode === 'hva') {
       for (let i = 0; i < H.length; i++) {
         if ((i & 15) === 0 && stop()) throw cancelled();
+        let penH = 0;
+        if (ks) { penH = ks.humans([H[i]]); if (penH === Infinity) { kitRejected += A.length; continue; } }
         for (let a = 0; a < A.length; a++) {
           if (!noReject && d2(H[i], A[a]) < f2) continue;
-          offer(makeSet(mode, H[i], null, A[a]), i, -1, a);
+          offer(makeSet(mode, H[i], null, A[a]), i, -1, a, ks ? penH + nestPen[a] : 0);
         }
       }
     } else {
@@ -155,6 +163,8 @@
         for (let j = i + 1; j < H.length; j++) {
           const dij2 = d2(H[i], H[j]);
           if (!noReject && dij2 < f2) continue;
+          let penH = 0;
+          if (ks) { penH = ks.humans([H[i], H[j]]); if (penH === Infinity) { kitRejected += A.length; continue; } }
           const dij = Math.sqrt(dij2);
           for (let a = 0; a < A.length; a++) {
             if (!noReject) {
@@ -164,12 +174,53 @@
               if (dja2 < f2) continue;
               if (M.squeeze3(dij, Math.sqrt(dia2), Math.sqrt(dja2)) < 0.3) continue;
             }
-            offer(makeSet(mode, H[i], H[j], A[a]), i, j, a);
+            offer(makeSet(mode, H[i], H[j], A[a]), i, j, a, ks ? penH + nestPen[a] : 0);
           }
         }
       }
     }
-    return { items: pool.items, K1, scored, enumerated };
+    return { items: pool.items, K1, scored, enumerated, kitRejected };
+  }
+
+  /**
+   * Exact-kit screen for stage 1 (spec 13.3), null in auto mode. humans(list) -> Infinity when
+   * the plan cannot give every human n Balterium within R_b (kMax = fewest exclusive + shared
+   * < n: G3 must fail, the set is dropped), else KIT_SHORT_PEN per Balterium the total would
+   * miss (the frozen radii leave too few patches for counts.balterium: G4 must fail);
+   * nest(alien) -> the same penalty for Biotics (the rest of R_n is removed).
+   */
+  const KIT_SHORT_PEN = 10;
+  function kitScreen(ctx, s, mode) {
+    const ex = Patches().exactKits(s), n = ex.human, m = mode === 'hvh' ? null : ex.alien;
+    if (n === null && m === null) return null;
+    const r = s.radii || {}, Rb = r.build || 1000, Rn = r.nest || 1200, P = ctx.patches, cnt = s.counts || {};
+    const BK = [], OK = [];
+    for (let k = 0; k < P.length; k++) { if (P[k].type === 'Balterium') BK.push(k); else if (P[k].type === 'Biotics') OK.push(k); }
+    const wantB = cnt.balterium != null ? cnt.balterium : Math.round(0.75 * BK.length);
+    const wantO = cnt.biotics != null ? cnt.biotics : Math.round(0.75 * OK.length);
+    const humans = n === null ? () => 0 : hs => {
+      const excl = hs.map(() => 0);
+      let shared = 0, union = 0;
+      for (const k of BK) {
+        let c = 0, last = -1;
+        for (let i = 0; i < hs.length; i++) if (hs[i].pd[k] <= Rb) { c++; last = i; }
+        if (!c) continue;
+        union++;
+        if (c > 1) shared++; else excl[last]++;
+      }
+      const e = Math.min(...excl);
+      if (e + shared < n) return Infinity;
+      if (!(wantB < BK.length)) return 0;
+      const kitTotal = hs.length * n - (hs.length - 1) * Math.max(0, n - e);
+      return KIT_SHORT_PEN * Math.max(0, wantB - (BK.length - union + kitTotal));
+    };
+    const nest = m === null ? () => 0 : c => {
+      if (!(wantO < OK.length)) return 0;
+      let inside = 0;
+      for (const k of OK) if (c.pd[k] <= Rn) inside++;
+      return KIT_SHORT_PEN * Math.max(0, wantO - (OK.length - inside + Math.min(inside, m)));
+    };
+    return { humans, nest };
   }
 
   /**
@@ -245,7 +296,9 @@
       let nO = 0;
       for (const p of P) if (p.type === 'Biotics') nO++;
       const want = cnt.biotics != null ? cnt.biotics : Math.round(0.75 * nO);
-      const kA = Math.min(inside.length, Patches().alienKitCap(want, hs.length));
+      // exact Nest kit (spec 13.3): every Biotics inside R_n is fixed (kept or removed) -> all of them
+      const kA = Patches().exactKits(s).alien !== null ? inside.length
+        : Math.min(inside.length, Patches().alienKitCap(want, hs.length));
       parts.push('A:' + order('Alien', c, inside).slice(0, kA).map(o => o.k).join(','));
     }
     // the layer cap (spec 12.3) reads each human's layer zone, so the plan depends on it too
@@ -384,7 +437,11 @@
    * GenResult = {settings, settingsHash, seed, version, ctrl: {n, cell, minX, maxZ},
    *   candidates: Evaluation[] (presented, ranked; each + rank, sig, owner Int8Array,
    *   ownerSides, aboveBar), stats: {candidates, stage1Sets, stage1Enumerated, stage2Sets,
-   *   refined, fallback, ms, timing}}.
+   *   refined, fallback, kitRange: {humanMax, alienMax}, ms, timing}}.
+   * Infeasible request (spec 13.5): candidates [] plus infeasible {reason, detail}, reason one of
+   * kit_invalid, nest_invalid, kit_budget, nest_budget, kit_candidates, nest_candidates, no_set,
+   * kit_total, nest_total
+   * (and no_candidates when the map has no valid spot at all); never thrown.
    * Throws an Error with .cancelled = true when shouldStop() returns true.
    */
   function run(ctx, settings, onProgress, shouldStop) {
@@ -414,10 +471,23 @@
       candidates: [],
       stats: { candidates: { human: H.length, alien: A.length }, stage1Sets: 0, stage1Enumerated: 0, stage2Sets: 0, refined: 0, fallback: false, ms: 0, timing },
     };
-    if (!H.length || (mode !== 'hvh' && !A.length)) {
+    // spec 13.2: the largest kit any unfiltered spot reaches (the UI shows it as the maximum)
+    const cs = (ctx.stats && ctx.stats.candidates) || {};
+    result.stats.kitRange = {
+      humanMax: cs.human && typeof cs.human.maxKit === 'number' ? cs.human.maxKit : null,
+      alienMax: mode !== 'hvh' && cs.alien && typeof cs.alien.maxKit === 'number' ? cs.alien.maxKit : null,
+    };
+    const infeasible = (reason, detail, text) => {
+      result.candidates = [];
+      result.infeasible = { reason, detail };
       result.stats.ms = Math.round(now() - t0);
-      prog(1, 'no candidates');
+      prog(1, text || `infeasible: ${reason}`);
       return result;
+    };
+    const exact = exactCheck(ctx, s, mode, H, A, result.stats.kitRange);
+    if (exact.fail) return infeasible(exact.fail.reason, exact.fail.detail);
+    if (!H.length || (mode !== 'hvh' && !A.length)) {
+      return infeasible('no_candidates', `no valid ${!H.length ? 'HQ' : 'Nest'} spot on this map`, 'no candidates');
     }
 
     // 2. stage 1
@@ -458,6 +528,8 @@
       if (Cand().valid(ctx, s, role, px, py)) {
         c = Cand().at(ctx, s, role, px, py);
         if (c.E > (role === 'alien' ? cutA : cutH)) c = null;   // G1 exposure cut
+        // exact kits (spec 13.2): the same necessary condition as the candidate list
+        else if (role === 'alien' ? (exact.alien !== null && c.nBio < exact.alien) : (exact.human !== null && c.nBalt < exact.human)) c = null;
       }
       candMemo.set(key, c);
       return c;
@@ -477,6 +549,23 @@
     const seen = new Set();
     evals = evals.filter(e => (seen.has(e.sig) ? false : (seen.add(e.sig), true)));
     evals.sort(cmpEval);
+    if (!evals.length) {
+      return infeasible('no_set', exact.on
+        ? 'no start set passes the kit screen (every pair of spots shares too much of its kit, or nothing passes stage 1)'
+        : 'no start set can be formed from the candidates');
+    }
+    // exact kits (spec 13.5): only sets passing G1-G3 are presented, no fallback
+    // and a set whose fill ran dry below the total (kit_total / nest_total, G4) is never shown
+    if (exact.on) {
+      const pass = evals.filter(e => !e.gateFails.some(g => g === 'G1' || g === 'G2' || g === 'G3'));
+      if (!pass.length) return infeasible('no_set', noSetDetail(evals[0], evals.length, exact, mode));
+      const full = pass.filter(e => !e.gateFails.includes('G4') && !totalFails(e).length);
+      if (!full.length) {
+        const t = totalDetail(pass, exact, s);
+        return infeasible(t.reason, t.detail);
+      }
+      evals = full;
+    }
     const topN = s.topN || 5;
     const shown = [];
     for (const e of evals) {
@@ -496,6 +585,73 @@
     result.stats.ms = Math.round(now() - t0);
     prog(1, 'done');
     return result;
+  }
+
+  // ── exact kits (spec 13.5) ────────────────────────────────────────────
+
+  /**
+   * Validates the exact-kit settings and checks the budget / candidate conditions of spec 13.5.
+   * -> {on, human, alien, fail: null | {reason, detail}}; human / alien are null when auto (the
+   * Nest setting is ignored in hvh).
+   */
+  function exactCheck(ctx, s, mode, H, A, range) {
+    const P = Patches(), out = { on: false, human: null, alien: null, fail: null };
+    const hRaw = P.exactOf(s.kitExact), aRaw = mode === 'hvh' ? null : P.exactOf(s.nestKitExact);
+    if (Number.isNaN(hRaw)) { out.fail = { reason: 'kit_invalid', detail: `start Balterium must be a whole number >= 0 or empty (auto), got ${JSON.stringify(s.kitExact)}` }; return out; }
+    if (Number.isNaN(aRaw)) { out.fail = { reason: 'nest_invalid', detail: `start Biotics must be a whole number >= 0 or empty (auto), got ${JSON.stringify(s.nestKitExact)}` }; return out; }
+    out.human = hRaw; out.alien = aRaw; out.on = hRaw !== null || aRaw !== null;
+    if (!out.on) return out;
+    const v = ctx.vanilla || { Balterium: 0, Biotics: 0 }, c = s.counts || {};
+    const totB = Math.min(c.balterium != null ? c.balterium : Math.round(0.75 * v.Balterium), v.Balterium);
+    const totO = Math.min(c.biotics != null ? c.biotics : Math.round(0.75 * v.Biotics), v.Biotics);
+    const nH = mode === 'hva' ? 1 : 2, r = s.radii || {}, Rb = r.build || 1000, Rn = r.nest || 1200;
+    if (out.human !== null && out.human * nH > totB) {
+      out.fail = { reason: 'kit_budget', detail: `kit needs ${out.human * nH} Balterium (${out.human} x ${nH}), total is ${totB}` };
+    } else if (out.alien !== null && out.alien > totO) {
+      out.fail = { reason: 'nest_budget', detail: `Nest kit needs ${out.alien} Biotics, total is ${totO}` };
+    } else if (out.human !== null && H.length < nH) {
+      const max = range && range.humanMax != null ? range.humanMax : '?';
+      out.fail = { reason: 'kit_candidates', detail: `${H.length} HQ spot(s) reach ${out.human} Balterium within ${Rb} m, ${nH} needed; max reachable on this map: ${max}` };
+    } else if (out.alien !== null && !A.length) {
+      const max = range && range.alienMax != null ? range.alienMax : '?';
+      out.fail = { reason: 'nest_candidates', detail: `no Nest spot reaches ${out.alien} Biotics within ${Rn} m; max: ${max}` };
+    }
+    return out;
+  }
+
+  function totalFails(e) {
+    const f = (e.plan && e.plan.failures) || [];
+    return f.filter(x => x === 'kit_total' || x === 'nest_total');
+  }
+
+  /**
+   * kit_total / nest_total (spec 13.5): every set passing G1-G3 misses a total. Reason = the
+   * best such set's first total failure (Biotics first when it misses both); X = the largest
+   * achievable kept count of that type over those sets.
+   */
+  function totalDetail(pass, exact, s) {
+    const best = pass[0], tf = totalFails(best);
+    const reason = tf.includes('nest_total') ? 'nest_total' : tf.includes('kit_total') ? 'kit_total'
+      : (best.plan && best.plan.achievable && best.plan.achievable.Biotics < best.plan.target.Biotics ? 'nest_total' : 'kit_total');
+    const type = reason === 'nest_total' ? 'Biotics' : 'Balterium';
+    let X = 0;
+    for (const e of pass) {
+      const a = e.plan && e.plan.achievable ? e.plan.achievable[type] : (e.plan && e.plan.kept ? e.plan.kept[type].length : 0);
+      if (a > X) X = a;
+    }
+    const c = s.counts || {}, Y = type === 'Biotics' ? c.biotics : c.balterium;
+    const kitTxt = type === 'Biotics'
+      ? `m=${exact.alien !== null ? exact.alien : 'auto'}` : `n=${exact.human !== null ? exact.human : 'auto'}`;
+    return { reason, detail: `with ${kitTxt}, at most ${X} ${type} can be kept on this map (requested ${Y}); lower the total or the kit` };
+  }
+
+  /** Detail of a no_set result: the best evaluated set's gate fails and kits. */
+  function noSetDetail(best, nEval, exact, mode) {
+    const kit = (best.metrics && best.metrics.kit) || {}, keys = mode === 'hva' ? ['Sol', 'Alien'] : ['Sol', 'Cent', 'Alien'];
+    const kitTxt = keys.filter(k => kit[k] !== undefined).map(k => `${k} ${kit[k]}`).join(' / ');
+    const want = [exact.human !== null ? `${exact.human} per human` : null, exact.alien !== null ? `${exact.alien} for the Nest` : null].filter(Boolean).join(', ');
+    const pf = best.plan && best.plan.failures && best.plan.failures.length ? ` (${best.plan.failures.join(', ')})` : '';
+    return `no start set passes G1-G3 (${nEval} evaluated); best set fails ${best.gateFails.join(', ') || '-'}${pf}, kit ${kitTxt || '-'}, wanted ${want}`;
   }
 
   // ── hashing / stable serialisation ────────────────────────────────────

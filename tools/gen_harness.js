@@ -4,6 +4,8 @@
 //   node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir]
 //                             [--no-determinism] [--no-seed-check] [--no-selftest] [--strict]
 //   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
+//   node tools/gen_harness.js [--kit N] [--nest M] ...            exact start kits (spec 13) on every run
+//   node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps ..] [--modes ..]
 //
 // Builds GenRaw from disk (pngjs for masks and heights, Terrain.decode for heights), runs
 // GenContext.build + GenSearch.run for every map x mode, writes <out>/gen_report.md,
@@ -14,6 +16,14 @@
 // --layout mode (spec 12.6): evaluates existing layout JSONs (the tool's export or a generated
 // one: spawns + removed_patches, radii from its `settings`) with GenMetrics.evaluate on the
 // geodesic fields and prints gates, terms and the expansion curves; nothing else runs.
+//
+// Exact kits (spec 13.8): --kit N / --nest M set kitExact / nestKitExact on every run (the Nest
+// setting only in hva / hvhva); a run may then end infeasible (GenResult.infeasible, not fatal),
+// every presented result's kit is re-counted from its layout (removed_patches + the resource
+// JSON + the spawn positions), and the gap check is report-only. --sweep-kit / --sweep-nest run
+// one row per map x mode x value (kit: hvh, hva, hvhva; Nest: hva, hvhva; the other setting
+// auto) and write <out>/sweep_report.md / .json; exit 1 on an exception, an empty result without
+// a reason, a kit miscount, ms > 3000 or a determinism miss on the seed-repeat sample.
 'use strict';
 
 const fs = require('fs');
@@ -182,10 +192,13 @@ const cell = s => String(s).replace(/\|/g, '/');
 
 // ── run one map x mode ───────────────────────────────────────────────────
 
-function runOne(E, raw, mode, seed) {
+function runOne(E, raw, mode, seed, exact) {
   // the engine's defaults when it has them (same values as defaultSettings above)
+  const over = { mode, seed };
+  if (exact && exact.kit != null) over.kitExact = exact.kit;
+  if (exact && exact.nest != null && mode !== 'hvh') over.nestKitExact = exact.nest;
   const settings = typeof E.GenContext.defaultSettings === 'function'
-    ? E.GenContext.defaultSettings(raw, { mode, seed }) : defaultSettings(raw, mode, seed);
+    ? E.GenContext.defaultSettings(raw, over) : Object.assign(defaultSettings(raw, mode, seed), over);
   const t0 = process.hrtime.bigint();
   const ctx = E.GenContext.build(raw, settings);
   const t1 = process.hrtime.bigint();
@@ -220,6 +233,34 @@ function gapOk(row) {
   return !row.gap || !Number.isFinite(row.gap.Balterium) || row.gap.Balterium <= gapLimit(row);
 }
 
+function isExact(settings) {
+  return !!settings && (settings.kitExact != null || settings.nestKitExact != null);
+}
+
+/**
+ * Kit counts of a layout JSON from its own data only (spec 13.8): kept = the resource JSON's
+ * active patches not in removed_patches; human kit = kept Balterium within solBuildRadius of
+ * Sol[0] (and Cent[0]); Nest kit = kept Biotics within alienBuildRadius of Alien[0].
+ */
+function layoutKits(L, raw, mode) {
+  const rm = new Set((L.resources && L.resources.removed_patches) || []);
+  const st = L.settings || {}, sp = L.spawns || {};
+  const kept = (raw.resources.resources || []).filter(p => p.active !== false && !rm.has(p.idx));
+  const count = (s, type, R) => (s ? kept.filter(p => p.type === type && Math.hypot(p.x - s.x, p.z - s.z) <= R).length : null);
+  const out = { Sol: count((sp.Sol || [])[0], 'Balterium', st.solBuildRadius || 1000) };
+  if (mode !== 'hva') out.Cent = count((sp.Cent || [])[0], 'Balterium', st.centBuildRadius || st.solBuildRadius || 1000);
+  if (mode !== 'hvh') out.Alien = count((sp.Alien || [])[0], 'Biotics', st.alienBuildRadius || 1200);
+  return out;
+}
+
+/** Issues of a layout against the exact kits asked for ([] when they match or are auto). */
+function kitIssues(L, raw, mode, settings) {
+  const k = layoutKits(L, raw, mode), out = [];
+  if (settings.kitExact != null) for (const r of ['Sol', 'Cent']) if (k[r] !== undefined && k[r] !== settings.kitExact) out.push(`${r} kit ${k[r]} != ${settings.kitExact}`);
+  if (settings.nestKitExact != null && mode !== 'hvh' && k.Alien !== settings.nestKitExact) out.push(`Nest kit ${k.Alien} != ${settings.nestKitExact}`);
+  return out;
+}
+
 function summarize(raw, mode, seed, run, E) {
   const { settings, result, ctx } = run;
   const ev = (result && result.candidates && result.candidates[0]) || null;
@@ -233,6 +274,11 @@ function summarize(raw, mode, seed, run, E) {
     timing: stats.timing || null,
     gapVanilla: vanillaGap(E, raw, ctx),
   };
+  if (isExact(settings)) {
+    row.exact = { kit: settings.kitExact, nest: mode === 'hvh' ? null : settings.nestKitExact };
+    row.kitRange = stats.kitRange || null;
+  }
+  if (result && result.infeasible) row.infeasible = result.infeasible;
   if (!ev) return row;
   const roles = rolesOf(ev.set, mode);
   const m = ev.metrics || {};
@@ -279,6 +325,16 @@ function summarize(raw, mode, seed, run, E) {
     const layout = E.GenLayout.build(ctx, settings, e, i + 1, AMOUNTS);
     row.layouts.push({ rank: i + 1, layout, issues: checkLayout(layout, mode, raw, settings, e) });
   });
+  // exact kits: every presented result, re-counted from its layout
+  if (row.exact) {
+    row.kitMiss = [];
+    result.candidates.forEach((e, i) => {
+      const L = i < 3 ? row.layouts[i].layout : E.GenLayout.build(ctx, settings, e, i + 1, AMOUNTS);
+      const iss = kitIssues(L, raw, mode, settings);
+      if (iss.length) row.kitMiss.push(`#${i + 1}: ${iss.join(', ')}`);
+    });
+    row.layoutKit = layoutKits(row.layouts[0].layout, raw, mode);
+  }
   return row;
 }
 
@@ -334,7 +390,9 @@ function thresholdIssues(row) {
   const g14 = (row.gateFails || []).filter(g => g !== 'G5');
   if (g14.length && !EXPECTED_GATE_FAILS.has(`${row.map}|${row.mode}`)) out.push(`top-1 fails ${g14.join(',')}`);
   if (g5Miss(row)) out.push('top-1 fails G5 while a presented set passes it');
-  if (!gapOk(row)) out.push(`gap B ${Math.round(row.gap.Balterium)} > ${Math.round(gapLimit(row))}`);
+  // spec 13.6: report-only when an exact kit is on
+  if (!gapOk(row) && !row.exact) out.push(`gap B ${Math.round(row.gap.Balterium)} > ${Math.round(gapLimit(row))}`);
+  if (row.kitMiss && row.kitMiss.length) out.push(`exact kit miss ${row.kitMiss.join('; ')}`);
   for (const l of row.layouts || []) if (l.issues.length) out.push(`layout #${l.rank}: ${l.issues.join('; ')}`);
   return out;
 }
@@ -379,7 +437,8 @@ function writeReport(outDir, rows, extra) {
     const c = r.candidates || {};
     const t = r.terms || {};
     const thr = thresholdIssues(r);
-    const status = r.nResults === 0 ? 'NO CANDIDATE' : thr.length ? `WARN ${cell(thr.join('; '))}` : 'ok';
+    const status = r.infeasible ? `infeasible: ${cell(r.infeasible.reason)}: ${cell(r.infeasible.detail)}`
+      : r.nResults === 0 ? 'NO CANDIDATE' : thr.length ? `WARN ${cell(thr.join('; '))}` : 'ok';
     const tm = r.timing || {};
     const stages = r.timing ? `${f0(tm.candidates)}/${f0(tm.stage1)}/${f0(tm.stage2)}/${f0(tm.refine)}` : '-';
     L.push(`| ${r.map} | ${r.mode} | ${f0(r.ms)} | ${f0(r.buildMs)} | ${f0(r.searchMs)} | ${stages} | ${f0(c.human)}/${f0(c.alien)} | ` +
@@ -440,7 +499,13 @@ function writeReport(outDir, rows, extra) {
 
 function parseArgs(argv) {
   const a = { maps: null, modes: MODES.slice(), seed: 1, out: path.join(__dirname, 'out'),
-    determinism: true, seedCheck: true, selftest: true, strict: false, layouts: [] };
+    determinism: true, seedCheck: true, selftest: true, strict: false, layouts: [],
+    kit: null, nest: null, sweepKit: null, sweepNest: null, sweepDet: 5 };
+  const ints = (k, v) => {
+    const out = String(v).split(',').map(s => s.trim()).filter(Boolean).map(Number);
+    if (!out.length || out.some(n => !Number.isInteger(n) || n < 0)) throw new Error(`${k} wants whole numbers >= 0, got ${v}`);
+    return out;
+  };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i], next = () => argv[++i];
     if (k === '--maps') a.maps = next().split(',').map(s => s.trim()).filter(Boolean);
@@ -452,10 +517,16 @@ function parseArgs(argv) {
     else if (k === '--no-selftest') a.selftest = false;
     else if (k === '--strict') a.strict = true;
     else if (k === '--layout') a.layouts.push(path.resolve(next()));
+    else if (k === '--kit') a.kit = ints(k, next())[0];
+    else if (k === '--nest') a.nest = ints(k, next())[0];
+    else if (k === '--sweep-kit') a.sweepKit = ints(k, next());
+    else if (k === '--sweep-nest') a.sweepNest = ints(k, next());
+    else if (k === '--sweep-det') a.sweepDet = ints(k, next())[0];
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
-        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict]\n' +
-        'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]');
+        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M]\n' +
+        'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]\n' +
+        'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]');
       process.exit(0);
     } else throw new Error(`unknown argument ${k}`);
   }
@@ -559,9 +630,122 @@ function layoutMode(args) {
   process.exitCode = bad ? 1 : 0;
 }
 
+// ── sweep mode (spec 13.8) ───────────────────────────────────────────────
+
+/**
+ * One row per map x mode x value: --sweep-kit values (nest auto) in hvh / hva / hvhva and
+ * --sweep-nest values (kit auto) in hva / hvhva. Status ok (every presented result re-counted
+ * from its layout) or infeasible: <reason>; FAIL on an exception, an empty result without a
+ * reason, a kit miscount or ms > 3000. Every --sweep-det-th row is run again with the same seed
+ * (SHA-256 of the canonical result must match).
+ */
+async function sweepMode(args) {
+  const MAP_CONFIG = loadMapConfig();
+  const maps = args.maps || Object.keys(MAP_CONFIG);
+  for (const m of maps) if (!MAP_CONFIG[m]) throw new Error(`unknown map ${m}`);
+  const E = loadEngine();
+  fs.mkdirSync(args.out, { recursive: true });
+  const jobs = [];
+  for (const map of maps) {
+    for (const mode of args.modes) {
+      for (const n of args.sweepKit || []) jobs.push({ map, mode, kind: 'kit', value: n, exact: { kit: n, nest: null } });
+      if (mode !== 'hvh') for (const m of args.sweepNest || []) jobs.push({ map, mode, kind: 'nest', value: m, exact: { kit: null, nest: m } });
+    }
+  }
+  const rows = [];
+  let fatal = false;
+  for (let q = 0; q < jobs.length; q++) {
+    const j = jobs[q];
+    process.stdout.write(`${j.map.padEnd(18)} ${j.mode.padEnd(6)} ${j.kind} ${String(j.value).padEnd(3)} `);
+    const row = { map: j.map, mode: j.mode, kind: j.kind, value: j.value };
+    try {
+      const raw = loadRaw(j.map, MAP_CONFIG);
+      const run = runOne(E, raw, j.mode, args.seed, j.exact);
+      const s = summarize(raw, j.mode, args.seed, run, E);
+      Object.assign(row, {
+        ms: s.ms, nResults: s.nResults, kitRange: s.kitRange, infeasible: s.infeasible || null,
+        gateFails: s.gateFails || null, kitMiss: s.kitMiss || [], layoutKit: s.layoutKit || null,
+        g4: run.result.candidates.filter(e => (e.gateFails || []).includes('G4')).length,
+        g5: run.result.candidates.filter(e => (e.gateFails || []).includes('G5')).length,
+        gap: s.gap || null, gapOk: s.gap ? gapOk(s) : null,
+        hash: sha256(canonical(run.result)),
+      });
+      const problems = [];
+      if (!row.nResults && !(row.infeasible && row.infeasible.reason && row.infeasible.detail)) problems.push('empty result without a reason');
+      if (row.nResults && row.infeasible) problems.push('results and infeasible at once');
+      if (row.kitMiss.length) problems.push(`kit miss ${row.kitMiss.join('; ')}`);
+      if (!(row.ms <= 3000)) problems.push(`ms ${row.ms} > 3000`);
+      if (row.nResults && run.result.candidates.some(e => (e.gateFails || []).some(g => g === 'G1' || g === 'G2' || g === 'G3'))) problems.push('a presented set fails G1-G3');
+      // spec 13.5 (manager ruling): exact mode never presents a G4 fail (kit_total / nest_total instead)
+      if (row.g4) problems.push(`${row.g4} presented set(s) fail G4`);
+      row.status = problems.length ? `FAIL ${problems.join('; ')}` : row.infeasible ? `infeasible: ${row.infeasible.reason}` : 'ok';
+      if (problems.length) fatal = true;
+      if (args.sweepDet > 0 && q % args.sweepDet === 0) {
+        const h2 = sha256(canonical(runOne(E, raw, j.mode, args.seed, j.exact).result));
+        row.det = h2 === row.hash;
+        if (!row.det) { fatal = true; row.status += ' DETERMINISM FAIL'; }
+      }
+    } catch (e) {
+      row.status = `FAIL exception ${e.message}`;
+      row.stack = e.stack;
+      fatal = true;
+    }
+    console.log(`${f0(row.ms)} ms  ${row.status}` + (row.infeasible ? `: ${row.infeasible.detail}` : row.layoutKit ? `  kit ${fmtMap(row.layoutKit, f0, short)}` : ''));
+    rows.push(row);
+  }
+
+  // report
+  const L = ['# Spawn Generator exact-kit sweep (spec 13.8)', '',
+    `Generated ${new Date().toISOString()} | seed ${args.seed} | ${rows.length} rows | kit values ${(args.sweepKit || []).join(',') || '-'} | ` +
+    `Nest values ${(args.sweepNest || []).join(',') || '-'} | determinism sample every ${args.sweepDet}th row`, '',
+    'kit = Balterium within R_b per human (S/C) and Biotics within R_n for the Nest (A), re-counted from the top-1 layout ' +
+    '(removed_patches + resource JSON); every presented result is checked the same way. G4/G5 = presented results failing them. ' +
+    'Gap check report-only.', '',
+    '| map | mode | setting | ms | results | kit (top-1 layout) | max h/a | G4 | G5 | gap B ok | det | status |',
+    '|---|---|---|--:|--:|---|---|--:|--:|---|---|---|'];
+  for (const r of rows) {
+    const kr = r.kitRange ? `${r.kitRange.humanMax ?? '-'}/${r.kitRange.alienMax ?? '-'}` : '-';
+    L.push(`| ${r.map} | ${r.mode} | ${r.kind} ${r.value} | ${f0(r.ms)} | ${r.nResults ?? '-'} | ${r.layoutKit ? fmtMap(r.layoutKit, f0, short) : '-'} | ${kr} | ` +
+      `${r.g4 ?? '-'} | ${r.g5 ?? '-'} | ${r.gapOk === null || r.gapOk === undefined ? '-' : r.gapOk ? 'ok' : 'over'} | ${r.det === undefined ? '' : r.det ? 'same' : 'DIFF'} | ` +
+      `${cell(r.status)}${r.infeasible ? ': ' + cell(r.infeasible.detail) : ''} |`);
+  }
+  L.push('', '## Summary per setting', '', '| setting | rows | ok | infeasible | reasons | FAIL |', '|---|--:|--:|--:|---|--:|');
+  const keys = [...new Set(rows.map(r => `${r.kind} ${r.value}`))];
+  const summary = [];
+  for (const k of keys) {
+    const rs = rows.filter(r => `${r.kind} ${r.value}` === k);
+    const reasons = {};
+    for (const r of rs) if (r.infeasible && !String(r.status).startsWith('FAIL')) reasons[r.infeasible.reason] = (reasons[r.infeasible.reason] || 0) + 1;
+    const line = { setting: k, rows: rs.length, ok: rs.filter(r => r.status === 'ok').length,
+      infeasible: rs.filter(r => String(r.status).startsWith('infeasible')).length, reasons,
+      fail: rs.filter(r => String(r.status).startsWith('FAIL') || String(r.status).includes('DETERMINISM')).length };
+    summary.push(line);
+    L.push(`| ${k} | ${line.rows} | ${line.ok} | ${line.infeasible} | ${Object.keys(reasons).map(x => `${x} ${reasons[x]}`).join(', ') || '-'} | ${line.fail} |`);
+  }
+  const det = rows.filter(r => r.det !== undefined);
+  const msMax = Math.max(0, ...rows.filter(r => typeof r.ms === 'number').map(r => r.ms));
+  const checks = [
+    `rows: ${rows.length}; ok ${rows.filter(r => r.status === 'ok').length}, infeasible ${rows.filter(r => String(r.status).startsWith('infeasible')).length}, FAIL ${rows.filter(r => String(r.status).startsWith('FAIL')).length}`,
+    `ms <= 3000: ${rows.filter(r => r.ms <= 3000).length}/${rows.length}; max ${f0(msMax)} ms`,
+    `determinism (seed repeated) on the sample: ${det.filter(r => r.det).length}/${det.length} identical`,
+    `presented results with a G4 fail: ${rows.reduce((a, r) => a + (r.g4 || 0), 0)} over ${rows.filter(r => r.g4).length} rows; top-1 G4 fails: ${rows.filter(r => r.gateFails && r.gateFails.includes('G4')).length}`,
+    `gap B over the auto limit on the top-1 (report-only): ${rows.filter(r => r.gapOk === false).length} rows`,
+  ];
+  L.push('', '## Checks', '', ...checks.map(c => `- ${c}`), '');
+  fs.writeFileSync(path.join(args.out, 'sweep_report.md'), L.join('\n'));
+  fs.writeFileSync(path.join(args.out, 'sweep_report.json'), JSON.stringify({ seed: args.seed, checks, summary, rows }, null, 1));
+  console.log('');
+  for (const c of checks) console.log(c);
+  for (const s of summary) console.log(`${s.setting}: ${s.rows} rows, ok ${s.ok}, infeasible ${s.infeasible} (${Object.keys(s.reasons).map(x => `${x} ${s.reasons[x]}`).join(', ') || '-'}), FAIL ${s.fail}`);
+  console.log(`\nreport: ${path.join(args.out, 'sweep_report.md')}`);
+  process.exitCode = fatal ? 1 : 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.layouts.length) return layoutMode(args);
+  if (args.sweepKit || args.sweepNest) return sweepMode(args);
+  const exact = args.kit != null || args.nest != null ? { kit: args.kit, nest: args.nest } : null;
   const MAP_CONFIG = loadMapConfig();
   const maps = args.maps || Object.keys(MAP_CONFIG);
   for (const m of maps) if (!MAP_CONFIG[m]) throw new Error(`unknown map ${m}`);
@@ -585,16 +769,19 @@ async function main() {
       process.stdout.write(`${map.padEnd(18)} ${mode.padEnd(6)} `);
       let row;
       try {
-        const run = runOne(E, raw, mode, args.seed);
+        const run = runOne(E, raw, mode, args.seed, exact);
         row = summarize(raw, mode, args.seed, run, E);
         row._hash = sha256(canonical(run.result));
-        for (const l of row.layouts) {
+        for (const l of row.layouts || []) {
           fs.writeFileSync(path.join(args.out, 'layouts', E.GenLayout.fileName(l.layout)),
             JSON.stringify(l.layout, null, 1));
         }
-        if (row.nResults === 0) fatal = true;
-        console.log(`${f0(row.ms)} ms  score ${f2(row.score)}  fails [${(row.gateFails || []).join(',')}]` +
-          (row.nResults === 0 ? '  NO CANDIDATE' : ''));
+        // an infeasible exact request is a named result, not a failure (spec 13.5)
+        if (row.nResults === 0 && !row.infeasible) fatal = true;
+        if (row.kitMiss && row.kitMiss.length) fatal = true;
+        console.log(row.infeasible ? `${f0(row.ms)} ms  infeasible: ${row.infeasible.reason}: ${row.infeasible.detail}`
+          : `${f0(row.ms)} ms  score ${f2(row.score)}  fails [${(row.gateFails || []).join(',')}]` +
+          (row.nResults === 0 ? '  NO CANDIDATE' : '') + (row.kitMiss && row.kitMiss.length ? `  KIT MISS ${row.kitMiss.join('; ')}` : ''));
       } catch (e) {
         row = { map, mode, error: e.message };
         errors.push({ map, mode, stack: e.stack });
@@ -611,7 +798,7 @@ async function main() {
     for (const r of rows) {
       if (r.error) continue;
       try {
-        const run = runOne(E, loadRaw(r.map, MAP_CONFIG), r.mode, args.seed);
+        const run = runOne(E, loadRaw(r.map, MAP_CONFIG), r.mode, args.seed, exact);
         const h = sha256(canonical(run.result));
         n++;
         if (h !== r._hash) { bad++; checks.push(`determinism FAIL ${r.map} ${r.mode}: ${r._hash.slice(0, 12)} vs ${h.slice(0, 12)}`); }
@@ -629,7 +816,7 @@ async function main() {
       mapsSeen.add(r.map);
       try {
         const raw = loadRaw(r.map, MAP_CONFIG);
-        const run = runOne(E, raw, r.mode, args.seed + 1);
+        const run = runOne(E, raw, r.mode, args.seed + 1, exact);
         const ev = run.result.candidates[0];
         const r2 = { positions: {} };
         if (ev) for (const k of rolesOf(ev.set, r.mode)) r2.positions[k] = { x: ev.set[k].x, z: ev.set[k].z };
@@ -643,7 +830,7 @@ async function main() {
       const keys = new Set();
       for (let s = 1; s <= 5; s++) {
         try {
-          const run = runOne(E, loadRaw('GreatErg', MAP_CONFIG), 'hvh', s);
+          const run = runOne(E, loadRaw('GreatErg', MAP_CONFIG), 'hvh', s, exact);
           const ev = run.result.candidates[0];
           const r2 = { positions: {} };
           if (ev) for (const k of rolesOf(ev.set, 'hvh')) r2.positions[k] = { x: ev.set[k].x, z: ev.set[k].z };
@@ -662,7 +849,7 @@ async function main() {
   }
   const gapRows = rows.filter(r => !r.error && r.gap);
   const gapBad = gapRows.filter(r => !gapOk(r));
-  checks.push(`gap check (gap B <= max(900, 1.05 x vanilla gap B)): ${gapRows.length - gapBad.length}/${gapRows.length} ok` +
+  checks.push(`gap check (gap B <= max(900, 1.05 x vanilla gap B))${exact ? ' [report-only: exact kit]' : ''}: ${gapRows.length - gapBad.length}/${gapRows.length} ok` +
     (gapBad.length ? `; fails: ${gapBad.map(r => `${r.map} ${r.mode} ${f0(r.gap.Balterium)} > ${f0(gapLimit(r))}`).join(', ')}` : ''));
   checks.push(`thresholds: ${rows.length - thrBad}/${rows.length} rows clean`);
 
@@ -686,7 +873,13 @@ async function main() {
     (five.length < rows.length ? `; short: ${rows.filter(r => !five.includes(r)).map(r => `${r.map} ${r.mode} ${r.nResults || 0}`).join(', ')}` : ''));
   const msBad = rows.filter(r => !r.error && (typeof r.ms === 'number' ? r.ms : r.searchMs) > 3000);
   checks.push(`ms <= 3000: ${rows.length - msBad.length}/${rows.length}; max ${f0(Math.max(...rows.filter(r => !r.error).map(r => r.ms || 0)))} ms`);
-  checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${rows.filter(r => !r.error && r.nResults === 0).length} without candidates)`);
+  checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${rows.filter(r => !r.error && r.nResults === 0 && !r.infeasible).length} without candidates` +
+    `, ${rows.filter(r => r.infeasible).length} infeasible)`);
+  if (exact) {
+    const ex = rows.filter(r => r.exact && r.nResults);
+    checks.push(`exact kits (kit ${args.kit ?? 'auto'}, nest ${args.nest ?? 'auto'}): every presented result re-counted from its layout: ` +
+      `${ex.filter(r => !r.kitMiss.length).length}/${ex.length} rows exact; infeasible: ${rows.filter(r => r.infeasible).map(r => `${r.map} ${r.mode} ${r.infeasible.reason}`).join(', ') || '-'}`);
+  }
   if (args.strict && thrBad) fatal = true;
 
   // selftests
@@ -704,7 +897,7 @@ async function main() {
   process.exitCode = fatal ? 1 : 0;
 }
 
-module.exports = { loadMapConfig, loadRaw, defaultSettings, vanillaCounts, loadEngine, missingEngineFiles, canonical, sha256, ROOT, GEN };
+module.exports = { loadMapConfig, loadRaw, defaultSettings, vanillaCounts, loadEngine, missingEngineFiles, canonical, sha256, layoutKits, ROOT, GEN };
 
 if (require.main === module) {
   main().catch(e => { console.error(e.stack || e); process.exitCode = 1; });

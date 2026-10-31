@@ -338,6 +338,9 @@
 
   const ALL = ['hvh', 'hva', 'hvhva'];
 
+  /** Exact kit setting (spec 13.1): the whole number >= 0, else null (auto). */
+  function exactKit(v) { return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null; }
+
   const registry = [
     {
       id: 'G1', kind: 'hard', modes: ALL, weight: 1, label: 'G1 placement',
@@ -360,11 +363,18 @@
       compute(ctx, settings, set, m) {
         const minKit = settings.minKit != null ? settings.minKit : 3;
         const minKitA = settings.minKitAlien != null ? settings.minKitAlien : 4;
+        // spec 13.4: an exact kit (whole number >= 0) must be met exactly; a plan that could not
+        // reach it says so in plan.failures
+        const exH = exactKit(settings.kitExact), exA = exactKit(settings.nestKitExact);
+        // (kit_total / nest_total are budget misses: G4 reports them, not G3)
+        if (m.plan && Array.isArray(m.plan.failures) && m.plan.failures.some(f => f === 'kit_exact' || f === 'nest_exact')) return false;
         // every human kit >= minKit (hva too: its one human position), equal in hvh / hvhva
         const hs = m.sides.filter(s => s.human).map(s => m.kit[s.key]);
-        for (const n of hs) if (n !== hs[0] || n < minKit) return false;
+        if (exH !== null) { for (const n of hs) if (n !== exH) return false; }
+        else for (const n of hs) if (n !== hs[0] || n < minKit) return false;
         if (m.mode !== 'hvh') {
-          if (m.kit.Alien < minKitA) return false;
+          if (exA !== null) { if (m.kit.Alien !== exA) return false; }
+          else if (m.kit.Alien < minKitA) return false;
         }
         return true;
       },
@@ -737,6 +747,14 @@
     const plan3 = Object.assign({}, fx.plan, { kept: { Balterium: [0, 2, 3], Biotics: [4, 5] } });
     const ev3 = evaluate(fx.ctx, settings, fx.set, fx.fields, plan3);
     add('fixture hvh: unequal kit -> G3 and G4 fail', ev3.gateFails.indexOf('G3') >= 0 && ev3.gateFails.indexOf('G4') >= 0, ev3.gateFails);
+    // spec 13.4: exact kit = n passes, n + 1 fails, a plan failure fails
+    const kS = ev.metrics.kit.Sol;
+    const evK = evaluate(fx.ctx, Object.assign({}, settings, { kitExact: kS }), fx.set, fx.fields, fx.plan);
+    const evK1 = evaluate(fx.ctx, Object.assign({}, settings, { kitExact: kS + 1 }), fx.set, fx.fields, fx.plan);
+    const evKf = evaluate(fx.ctx, Object.assign({}, settings, { kitExact: kS }), fx.set, fx.fields, Object.assign({}, fx.plan, { failures: ['kit_exact'] }));
+    add('fixture hvh: G3 exact kit n passes, n + 1 fails, plan failure kit_exact fails',
+      evK.gateFails.indexOf('G3') < 0 && evK1.gateFails.indexOf('G3') >= 0 && evKf.gateFails.indexOf('G3') >= 0,
+      { kit: kS, exact: evK.gateFails, plus1: evK1.gateFails, failure: evKf.gateFails });
     const bad = Object.assign({}, fx.set.Sol, { px: 1, py: 1, x: fx.ctx.scan.minX + 15, z: fx.ctx.scan.maxZ - 15 });
     const ev4 = evaluate(fx.ctx, settings, { Sol: bad, Cent: fx.set.Cent }, fx.fields, fx.plan);
     add('fixture hvh: cell at the edge -> G1 fails', ev4.gateFails.indexOf('G1') >= 0, ev4.gateFails);

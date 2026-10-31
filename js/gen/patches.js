@@ -13,6 +13,20 @@
     return { build: r.build || 1000, chain: r.chain || 2500, nest: r.nest || 1200 };
   }
 
+  /**
+   * Exact start-kit setting (spec 13.1): null when auto (null / undefined / ''), the integer when
+   * it is a whole number >= 0, NaN when set but invalid (GenSearch.run reports that as infeasible
+   * before any plan is made; plan() treats NaN as auto).
+   */
+  function exactOf(v) {
+    if (v === null || v === undefined || v === '') return null;
+    return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : NaN;
+  }
+  function exactKits(settings) {
+    const h = exactOf(settings && settings.kitExact), a = exactOf(settings && settings.nestKitExact);
+    return { human: Number.isNaN(h) ? null : h, alien: Number.isNaN(a) ? null : a };
+  }
+
   function distTo(ctx, c, k) {
     if (c.pd) return c.pd[k];
     const p = ctx.patches[k];
@@ -34,6 +48,11 @@
    * layer {Sol, Cent} (spec 12.5: own-side kept Balterium with R_b < d <= reach*R_c + R_b),
    * layerCap {deflected, forced} (fill picks moved by the layer cap of spec 12.3 / taken
    * although inadmissible because no admissible patch was left).
+   * Exact kits (spec 13.3, settings.kitExact / nestKitExact not null): k = n per human with no
+   * paired adds, the m nearest Biotics inside R_n kept and the rest there removed; the plan then
+   * also carries exact {human, alien}, achievable {Balterium, Biotics} (kept counts reached) and
+   * failures: 'kit_exact' | 'nest_exact' (kit not reachable), 'kit_total' | 'nest_total' (the
+   * fill pool ran dry below the requested total because of the frozen-removed radii).
    */
   function plan(ctx, settings, set, fields, hooks) {
     const P = ctx.patches, nP = P.length, ctrl = ctx.ctrl;
@@ -46,7 +65,9 @@
     for (const t of TYPES) if (want[t] === undefined || want[t] === null) want[t] = Math.round(0.75 * vanilla[t]);
 
     const keep = new Uint8Array(nP), frozen = new Uint8Array(nP);
-    const geo = (role, c, k) => {
+    // spec 13.3: exact kits (null = auto); failures names a kit the set cannot reach (G3 fails)
+    const exact = exactKits(settings), failures = [];
+    const geo =(role, c, k) => {
       const D = fields && fields.D && fields.D[role];
       return D ? D[ctrl.patchCell[k]] : distTo(ctx, c, k);
     };
@@ -86,14 +107,21 @@
       const e = Math.min(...exOrder.map(l => l.length)), kMax = e + shared.length;
       const nShared = k => Math.max(0, k - e);
       const kitTotal = k => humans.length * k - (humans.length - 1) * nShared(k);
-      const cap = settings && settings.kitCap !== null && settings.kitCap !== undefined
-        ? settings.kitCap : Math.floor(want.Balterium / (2 * humans.length));
-      kH = Math.max(0, Math.min(kMax, cap));
-      // kitCapAuto (default on): raise k above the cap when the capped kit would freeze away
-      // so many patches that the Balterium total can no longer be met
-      const outside = nBal - union;
-      if (!(settings && settings.kitCapAuto === false) && want.Balterium < nBal) {
-        while (kH < kMax && kitTotal(kH) + outside < want.Balterium && kitTotal(kH + 1) <= want.Balterium) kH++;
+      if (exact.human !== null) {
+        // spec 13.3: k = n exactly, kitCap / kitCapAuto ignored; kMax < n -> the set cannot
+        // give every human n (failure 'kit_exact', G3 fails), the plan keeps what it can
+        kH = Math.min(kMax, exact.human);
+        if (kMax < exact.human) failures.push('kit_exact');
+      } else {
+        const cap = settings && settings.kitCap !== null && settings.kitCap !== undefined
+          ? settings.kitCap : Math.floor(want.Balterium / (2 * humans.length));
+        kH = Math.max(0, Math.min(kMax, cap));
+        // kitCapAuto (default on): raise k above the cap when the capped kit would freeze away
+        // so many patches that the Balterium total can no longer be met
+        const outside = nBal - union;
+        if (!(settings && settings.kitCapAuto === false) && want.Balterium < nBal) {
+          while (kH < kMax && kitTotal(kH) + outside < want.Balterium && kitTotal(kH + 1) <= want.Balterium) kH++;
+        }
       }
       const s = nShared(kH);
       for (let q = 0; q < s; q++) keep[shOrder[q]] = 1;
@@ -107,8 +135,13 @@
     if (set.Alien) {
       const c = set.Alien, l = [];
       for (let k = 0; k < nP; k++) if (P[k].type === 'Biotics' && distTo(ctx, c, k) <= R.nest) l.push(k);
-      kA = Math.min(l.length, alienKitCap(want.Biotics, humans.length));
       const order = nearestFirst('Alien', c, l);
+      if (exact.alien !== null) {
+        // spec 13.3: the m nearest stay, every other Biotics inside R_n is frozen as removed
+        kA = Math.min(l.length, exact.alien);
+        if (l.length < exact.alien) failures.push('nest_exact');
+        for (const k of l) frozen[k] = 1;
+      } else kA = Math.min(l.length, alienKitCap(want.Biotics, humans.length));
       for (let q = 0; q < kA; q++) { frozen[order[q]] = 1; keep[order[q]] = 1; }
     }
 
@@ -216,7 +249,8 @@
     for (const t of TYPES) {
       let keptT = 0, frozenRemoved = 0;
       const pool = [];
-      const paired = t === 'Balterium' && humans.length > 0 && want[t] < vanilla[t];
+      // exact human kit (spec 13.3): no paired adds, the in-radius pool stays empty
+      const paired = t === 'Balterium' && humans.length > 0 && want[t] < vanilla[t] && exact.human === null;
       for (let k = 0; k < nP; k++) {
         if (P[k].type !== t) continue;
         if (keep[k]) keptT++;
@@ -316,8 +350,20 @@
       if (i >= 0) layer[r] = layerFinal[i];
     }
 
-    return { kept, removed, frozen: frozenSet, kit, rings, gap, target, vanilla, kitK: { human: kH, alien: kA }, available, paired: nPaired,
+    const out = { kept, removed, frozen: frozenSet, kit, rings, gap, target, vanilla, kitK: { human: kH, alien: kA }, available, paired: nPaired,
       layer, layerCap: { deflected: capDeflected, forced: capForced } };
+    // exact mode only (an auto plan keeps the round-3 shape): the kits asked for and the misses
+    if (exact.human !== null || exact.alien !== null) {
+      // spec 13.3 / 13.5: the frozen-removed patches inside the radii can leave the fill pool
+      // too small for the requested total -> 'kit_total' (Balterium) / 'nest_total' (Biotics);
+      // achievable = the kept count this plan reaches
+      out.achievable = { Balterium: kept.Balterium.length, Biotics: kept.Biotics.length };
+      if (kept.Balterium.length < target.Balterium) failures.push('kit_total');
+      if (kept.Biotics.length < target.Biotics) failures.push('nest_total');
+      out.exact = { human: exact.human, alien: exact.alien };
+      out.failures = failures;
+    }
+    return out;
   }
 
   /**
@@ -383,5 +429,5 @@
     return bq;
   }
 
-  return { plan, alienKitCap, layerZones };
+  return { plan, alienKitCap, layerZones, exactOf, exactKits };
 }));

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-31 — Spawn Generator: exact starting kits
+
+The previous version (expansion layer fairness) is kept on the `old-v2` branch, the first generator on `old`.
+
+### Added
+- **Start Balterium per human** and **Start Biotics for the Nest** under *Advanced*: empty = auto (unchanged behaviour), a number = exactly that many patches inside the refinery radius / Nest radius
+  - Starting spots that cannot reach the number are skipped; the other patches inside the radius are removed and none are added back by the blank-area fill
+  - After a run the labels show the maximum possible on the current map
+  - A request the map cannot carry returns no results and a reason in the status line instead (total too small for the kit, no spot reaches the kit, totals unreachable with the kit, no fair spawn found)
+- `tools/gen_harness.js`: `--kit n`, `--nest m`, `--sweep-kit`, `--sweep-nest`; every presented exact result is re-counted from its layout
+
 ## 2026-10-31 — Spawn Generator: expansion layer fairness
 
 The previous generator version is kept on the `old` branch.

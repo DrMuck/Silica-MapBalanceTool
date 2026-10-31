@@ -274,6 +274,14 @@
             <span>Results (topN)</span>
             <input type="number" class="gen-num" id="gen-adv-topn" value="5" min="1" max="20" step="1">
           </div>
+          <div class="setting-row" title="Exact number of Balterium patches within the refinery radius of every human start. Empty = auto (equal kits, at least 3).">
+            <span>Start Balterium per human</span>
+            <span class="gen-inline"><input type="number" class="gen-num" id="gen-adv-kit" value="" placeholder="auto" min="0" step="1"> <span class="gen-of" id="gen-adv-kit-max"></span></span>
+          </div>
+          <div class="setting-row" title="Exact number of Biotics patches within the Nest radius (HvA, HvHvA). Empty = auto.">
+            <span>Start Biotics for the Nest</span>
+            <span class="gen-inline"><input type="number" class="gen-num" id="gen-adv-nestkit" value="" placeholder="auto" min="0" step="1"> <span class="gen-of" id="gen-adv-nestkit-max"></span></span>
+          </div>
         </details>
         <div class="gen-run-row">
           <button class="btn btn-alien" id="gen-run">Generate</button>

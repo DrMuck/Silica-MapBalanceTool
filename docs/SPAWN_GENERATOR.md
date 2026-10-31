@@ -606,3 +606,106 @@ HQ opens 5 [3-7] new Balterium against a greedy best of 10 [9-12]. Taken over: *
 **expReach = 0.85**, **T6 weights 0.45/0.35/0.20**. Not taken: a lower placement bound (cells
 near the spawn grab little because kit patches are excluded) and the "half of greedy" scale (a
 constant factor does not change ratios).
+
+## 13. Exact starting kits (round 4)
+
+User request: fix the number of patches each starter spawn has in reach (humans: Balterium
+within `R_b`; Nest: Biotics within `R_n`), so the algorithm cannot "break" the start.
+
+### 13.1 Settings and semantics
+
+`GenSettings.kitExact: null | int` (per human, Balterium) and `nestKitExact: null | int`
+(Biotics). `null` = auto (today's behaviour, default). With a number n / m: every presented
+layout has **exactly** n kept Balterium within `R_b` of every human spawn and exactly m kept
+Biotics within `R_n` of the Nest; spawn spots that cannot reach that are rejected. The kit
+exceeds the budget rule (`kitCap`, `kitCapAuto`), which is ignored when exact.
+
+### 13.2 Candidate filtering (`candidates.js`)
+
+When `kitExact = n`: drop human candidates with `nBalt(R_b) < n` (vanilla Balterium within
+`R_b`, already precomputed). When `nestKitExact = m`: drop alien candidates with `nBio(R_n) < m`.
+`stats.kitRange = { humanMax, alienMax }` = the maxima over the unfiltered candidates (the UI
+shows them). Overlapping human radii are not filtered here: a patch inside both radii counts
+for both kits, so the per-candidate count is a necessary condition and the plan (13.3) decides;
+with `d ≥ 0.85·d* > 2·R_b` overlaps are rare.
+
+### 13.3 Patch plan (`patches.js`)
+
+- Human kit: `k = n` exactly; `kitCapAuto` off; shared-patch handling unchanged (`kMax = e +
+  shared`; a set with `kMax < n` cannot reach n for every human and the plan reports
+  `failures: ['kit_exact']`, which G3 turns into a gate fail). All Balterium inside any human
+  `R_b` stays frozen and the **paired adds are disabled** (the in-radius pool is empty), so the
+  count stays n.
+- Nest kit: freeze the m nearest Biotics inside `R_n` as kept and **freeze the remaining
+  Biotics inside `R_n` as removed** (excluded from the fill); auto keeps today's behaviour.
+- Everything else (coverage fill, layer cap, G4 target) unchanged. If the fill pool runs dry
+  because of the frozen-removed patches, the plan reports `failures: ['kit_total' | 'nest_total']`
+  with the achievable count (13.5).
+
+### 13.4 G3
+
+Exact mode: `kit[h] === n` for every human and `kit.Alien === m`; auto mode as today
+(equal, ≥ minKit / ≥ minKitAlien). The gate fails cleanly, never throws.
+
+### 13.5 Infeasibility: a named result, no clamping
+
+`GenSearch.run` returns `{ candidates: [], infeasible: { reason, detail }, stats }` (no exception,
+worker posts `done`) when:
+
+| reason | condition | detail |
+|---|---|---|
+| `kit_budget` | `n · nHumans > counts.balterium` | "kit needs X Balterium, total is Y" |
+| `nest_budget` | `m > counts.biotics` | likewise |
+| `kit_candidates` | fewer human candidates with `nBalt ≥ n` than human roles (hvh/hvhva 2, hva 1) | "max reachable on this map: humanMax" |
+| `nest_candidates` | no alien candidate with `nBio ≥ m` | "max: alienMax" |
+| `no_set` | candidates exist but no set passes G1-G3 at stage 2 (e.g. only overlapping spots) | best set's gate fails |
+| `kit_total` / `nest_total` | exact mode freezes patches as removed inside the radii, so the pool can run dry: `kept_t < target_t` (G4) for a set. Such a set is **excluded from presentation** in exact mode (never shown with a red G4); if no set survives, the run is infeasible with this reason | "with n/m = …, at most X Balterium/Biotics can be kept on this map (requested Y); lower the total or the kit" with X = the largest achievable kept count over the evaluated sets |
+
+Both sides can hit this: the Nest clears the other Biotics inside `R_n`, and the human exact
+kit freezes the other Balterium inside `R_b` as removed with the paired adds off. Auto mode is
+unchanged (G4 shown as a gate, fallback allowed).
+
+No silent clamping of n, m or the totals: the user set them and sees the reason plus the
+feasible maxima. The existing fallback (show the best sets with gate fails) applies only to
+auto mode; in exact mode a set that misses the kit is never presented.
+
+### 13.6 Interactions
+
+- **Gap check:** with paired adds off, blank areas near the starts can grow (that is what
+  the user asked for). The harness gap check becomes **report-only when either exact setting is
+  on**; it stays hard in auto mode. The fill still minimises the gap outside the frozen zones.
+- **G5 / layer cap:** unchanged; the curve already excludes kit patches (`d > R_b`).
+- **Plan cache:** `planKey` is built per run from the set and its zones; settings are
+  constant within a run, so no key change. Confirm in the task that the key covers the kit
+  zones (it does today via the in-radius patch sets).
+- **Determinism:** unchanged; auto results must stay byte-identical.
+
+### 13.7 UI
+
+Advanced block: two number inputs `gen-adv-kit` ("Start Balterium per human") and
+`gen-adv-nestkit` ("Start Biotics for the Nest"), empty = auto, placeholder "auto"; after a run
+the label shows "max on this map: X" from `stats.kitRange`. An infeasible run shows
+`infeasible: <reason>: <detail>` in `gen-status` and an empty result list; no console errors.
+
+### 13.8 Acceptance
+
+- Auto: SHA-256 of the result identical to the committed round-3 output on 39/39 rows.
+- Outcome 2026-10-31: auto identical 39/39 (new null keys stripped); sweep 216 ok, 18 infeasible
+  with reasons, 0 crashes, max 1.15 s; the G4-in-exact-mode rule above was added after the
+  first sweep showed 46 presented results with a red G4 (BlackIsle every m).
+- Sweeps `node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15` (hvh: kit only;
+  hva, hvhva: both): one row per map × mode × value, status `ok` (every presented result has
+  exactly n per human and m for the Nest, verified from the layout's `removed_patches`) or
+  `infeasible: <reason>`; never an exception or an empty result without a reason; `ms ≤ 3000`;
+  determinism on a sample (seed repeated) 100 %.
+- Selftests: fixture with n = 2 on the synthetic hvh context (kit 2/2, paired adds absent);
+  fixture with n larger than any candidate → `kit_candidates`.
+
+### 13.9 Task (one executor)
+
+Owns: `js/gen/candidates.js`, `js/gen/patches.js`, `js/gen/metrics.js` (G3), `js/gen/search.js`
+(infeasible result, `stats.kitRange`), `js/gen/context.js` (defaults `kitExact: null`,
+`nestKitExact: null`), `js/gen/model_selftest.js`, `js/gen/browser_adapter.js` (settings from
+the DOM), `js/generator_ui.js`, `index.html`, `tools/gen_harness.js` (`--kit`, `--nest`,
+`--sweep-kit`, `--sweep-nest`, report-only gap when exact). Verify: 13.8. Doc: none (this
+section is the spec); report the sweep table in the task report.

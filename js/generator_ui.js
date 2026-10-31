@@ -91,6 +91,7 @@ const GeneratorUI = (() => {
       run = null;
       $('gen-results').innerHTML = '';
       setStatus('');
+      showKitRange(null);
     }
     if (job) cancelRun(`cancelled (map ${mapName === job.mapName ? 'reload' : 'switch'})`);
   }
@@ -117,6 +118,22 @@ const GeneratorUI = (() => {
     return Number.isFinite(v) ? v : fallback;
   }
 
+  /** Exact-kit input (spec 13.7): empty = null (auto); anything else goes to the engine as typed. */
+  function exactKit(id) {
+    const el = $(id);
+    const t = el ? String(el.value).trim() : '';
+    if (!t) return null;
+    const v = Number(t);
+    return Number.isNaN(v) ? NaN : v;
+  }
+
+  /** "max on this map: X" next to the exact-kit inputs, from GenResult.stats.kitRange. */
+  function showKitRange(range) {
+    const r = range || {};
+    $('gen-adv-kit-max').textContent = Number.isFinite(r.humanMax) ? `max on this map: ${r.humanMax}` : '';
+    $('gen-adv-nestkit-max').textContent = Number.isFinite(r.alienMax) ? `max on this map: ${r.alienMax}` : '';
+  }
+
   function readSettings() {
     const modeEl = document.querySelector('input[name="gen-mode"]:checked');
     const weights = {};
@@ -138,6 +155,8 @@ const GeneratorUI = (() => {
       exposureCut: Math.max(0.01, Math.min(1, num('gen-adv-expcut', 75) / 100)),
       controlModel: $('gen-adv-control').value,
       topN: Math.max(1, Math.round(num('gen-adv-topn', 5))),
+      kitExact: exactKit('gen-adv-kit'),
+      nestKitExact: exactKit('gen-adv-nestkit'),
     });
   }
 
@@ -309,8 +328,17 @@ const GeneratorUI = (() => {
     const st = (result && result.stats) || {};
     const c = st.candidates || {};
     const ms = Number.isFinite(st.ms) ? st.ms : wallMs;
+    // the kit maxima; an hvh run knows no Nest maximum, so keep the last one shown for this map
+    const prevNest = $('gen-adv-nestkit-max').textContent;
+    showKitRange(st.kitRange);
+    if (!(st.kitRange && Number.isFinite(st.kitRange.alienMax)) && settings.mode === 'hvh') $('gen-adv-nestkit-max').textContent = prevNest;
     setStatus(`${cands.length} set(s) in ${Math.round(ms)} ms · candidates ${c.human ?? '?'}h/${c.alien ?? '?'}a · ` +
       `stage 1 ${st.stage1Sets ?? '?'} · stage 2 ${st.stage2Sets ?? '?'}`);
+    // spec 13.5 / 13.7: an infeasible request is a named result, not an error
+    if (result && result.infeasible) {
+      setStatus(`infeasible: ${result.infeasible.reason}: ${result.infeasible.detail}`, true);
+      return;
+    }
     if (!cands.length) {
       setStatus('No valid start set found. Try a smaller enemy distance or fewer patches.', true);
       return;

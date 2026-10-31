@@ -7,6 +7,9 @@
 // nBalt(R_b) - 2E (human) / nBio(R_n) - 2E (alien), ties by the seeded rng -> greedy thinning
 // to >= min(300 m, extent/10) (300 m on 6 km maps, 150 m on 3 km, 100 m on BlackIsle; at a flat
 // 300 m the 2-3 km maps get only 13-39 candidates) -> cap 250.
+// Exact kit (spec 13.2, settings.kitExact / nestKitExact): spots with fewer than n own-type
+// patches within R are skipped in the thinning; ctx.stats.candidates[role].maxKit = the largest
+// count over the unfiltered spots.
 // Human candidates carry v1solo = GenExpansion.solo (spec 12.2: best single expansion cell,
 // enemies ignored, vanilla Balterium), the stage-1 expansion proxy.
 (function (root, factory) {
@@ -142,6 +145,10 @@
     const R = role === 'alien' ? (r.nest || 1200) : (r.build || 1000);
     const type = role === 'alien' ? 'Biotics' : 'Balterium';
     const bin = Math.max(1, Math.round(binM / step));
+    // spec 13.2: exact kit n -> only spots with >= n own-type patches within R (necessary
+    // condition; overlapping human radii are left to the plan)
+    const ex = role === 'alien' ? settings && settings.nestKitExact : settings && settings.kitExact;
+    const need = typeof ex === 'number' && Number.isInteger(ex) && ex >= 0 ? ex : null;
 
     // 1. one representative per bin
     const reps = [];
@@ -182,16 +189,25 @@
     // 3. score, seeded tie-break, sort
     for (let i = 0; i < kept.length; i++) {
       const q = kept[i], x = sc.minX + q.px * step, z = sc.maxZ - q.py * step;
-      q.score = countWithin(ctx, type, x, z, R) - 2 * q.E;
+      q.cnt = countWithin(ctx, type, x, z, R);
+      q.score = q.cnt - 2 * q.E;
       q.tie = rng ? rng.next() : i;
       q.x = x; q.z = z;
     }
     kept.sort((a, b) => (b.score - a.score) || (a.tie - b.tie));
 
-    // 4. greedy thinning, cap
+    // maxKit = the largest own-type count over the spots after the exposure cut (unfiltered,
+    // before thinning): the exact kit the UI reports as reachable (spec 13.2 kitRange). The
+    // spot holding it is always kept by the filtered thinning below (it is the first that passes).
+    let maxKit = 0;
+    for (const q of kept) if (q.cnt > maxKit) maxKit = q.cnt;
+
+    // 4. greedy thinning, cap (exact kit: spots below n are skipped before they can block others)
     const acc = [], sp2 = spacing * spacing;
+    let belowKit = 0;
     for (const q of kept) {
       if (acc.length >= cap) break;
+      if (need !== null && q.cnt < need) { belowKit++; continue; }
       let ok = true;
       for (const a of acc) {
         const dx = a.x - q.x, dz = a.z - q.z;
@@ -204,7 +220,7 @@
     const out = acc.map((q, i) => at(ctx, settings, role, q.px, q.py, `${pre}${i}`));
     if (ctx.stats) {
       ctx.stats.candidates = ctx.stats.candidates || {};
-      ctx.stats.candidates[role] = { validCells: nValid, bins: reps.length, cutE, afterCut: kept.length, count: out.length };
+      ctx.stats.candidates[role] = { validCells: nValid, bins: reps.length, cutE, afterCut: kept.length, count: out.length, maxKit, kitExact: need, belowKit };
     }
     return out;
   }

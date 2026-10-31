@@ -22,6 +22,8 @@
       enemyDistance: Math.min(2700, Math.max(1300, 0.9 * ext)),
       counts: { balterium: Math.round(0.75 * nB), biotics: Math.round(0.75 * nO) },
       minKit: 3, minKitAlien: 4, kitCap: null,
+      // spec 13.1: exact start kits (null = auto): Balterium within R_b per human, Biotics within R_n
+      kitExact: null, nestKitExact: null,
       // spec 12.2: T5 removed, T6 expansion balance added, T2/T3 halved
       weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 },
       // spec 12.1/12.8: K expansion HQs, cells within reach * R_c, T6 weights per k

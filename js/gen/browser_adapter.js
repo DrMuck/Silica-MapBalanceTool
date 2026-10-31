@@ -29,6 +29,7 @@
       enemyDistance: 2700,
       counts: { balterium: 0, biotics: 0 },
       minKit: 3, minKitAlien: 4, kitCap: null,
+      kitExact: null, nestKitExact: null,   // spec 13.1: exact start kits, null = auto
       // same as GenContext.defaultSettings (spec 12.2 / 12.5)
       weights: { T1: 1, T2: 0.5, T3: 0.5, T4: 1, T6: 1 },
       expansion: { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] },
@@ -61,7 +62,9 @@
 
   /**
    * values: the UI's plain values {mode, seed, enemyDistance, radii, counts, exposureWeight,
-   * weights, exposureCut, controlModel, topN}; anything missing keeps the spec default.
+   * weights, exposureCut, controlModel, topN, kitExact, nestKitExact}; anything missing keeps the
+   * spec default. kitExact / nestKitExact: null = auto, a number is passed on unchanged (the
+   * engine reports a value that is not a whole number >= 0 as infeasible, spec 13.5).
    */
   function makeSettings(values) {
     const s = defaultSettings();
@@ -76,6 +79,8 @@
     if (Number.isFinite(v.exposureCut)) s.exposureCut = v.exposureCut;
     if (v.controlModel) s.controlModel = v.controlModel;
     if (Number.isFinite(v.topN)) s.topN = v.topN;
+    if (typeof v.kitExact === 'number') s.kitExact = v.kitExact;
+    if (typeof v.nestKitExact === 'number') s.nestKitExact = v.nestKitExact;
     return s;
   }
 
