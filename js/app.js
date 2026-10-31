@@ -41,6 +41,7 @@ const App = (() => {
     Measure.init(map);
     Expansion.init(map);
     UI.init();
+    GeneratorUI.init(map);
 
     // Setup layer toggles
     setupLayerToggles();
@@ -59,6 +60,10 @@ const App = (() => {
     const extent = cfg.extent;
     // For variants (e.g. NorthPolarCap_40K), use base map's image/masks
     const assetMap = cfg.base_map || mapName;
+
+    // Generator: cancel a running job / drop its preview; start the (cached) height load
+    GeneratorUI.onMapChange(mapName);
+    Terrain.load(mapName);
 
     // Clear existing layers
     Placement.clearAll();
@@ -119,6 +124,7 @@ const App = (() => {
       if (m._resData) markers.push(m);
     });
     Expansion.setResourceMarkers(markers);
+    GeneratorUI.onMapLoaded(mapName);
 
     // HQ masks (use assetMap for variants)
     for (const faction of ['Sol', 'Cent']) {

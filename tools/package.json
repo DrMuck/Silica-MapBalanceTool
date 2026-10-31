@@ -1,0 +1,14 @@
+{
+  "name": "si-mapbalance-gen-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node harness and selftest runner for the Spawn Generator (docs/SPAWN_GENERATOR.md, T5)",
+  "scripts": {
+    "harness": "node gen_harness.js",
+    "selftest": "node gen_selftest.js"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

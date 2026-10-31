@@ -261,7 +261,7 @@ const Layers = (() => {
       `Grid: ${res.grid_w}x${res.grid_h} @ ${res.cell_size}m<br>` +
       `Extent: ${res.world_w}x${res.world_h}m<br>` +
       `<div style="margin-top:4px;">Amount${overrideTag}: ` +
-      `<input type="number" class="patch-amount-input" value="${displayAmount}" min="0" max="200000" step="1000" style="width:70px;background:#1a1a2e;color:#fff;border:1px solid #444;padding:2px 4px;font-size:11px;">` +
+      `<input type="number" class="patch-amount-input" value="${displayAmount}" min="0" max="200000" step="500" style="width:70px;background:#1a1a2e;color:#fff;border:1px solid #444;padding:2px 4px;font-size:11px;">` +
       `${hasOverride ? ' <button class="patch-reset-btn" style="background:#333;color:#ff8800;border:1px solid #555;padding:1px 6px;font-size:10px;cursor:pointer;">Reset</button>' : ''}` +
       `</div>` +
       excludedTag;
@@ -443,6 +443,22 @@ const Layers = (() => {
     return pixel[3] > 50; // any non-transparent = valid
   }
 
+  /**
+   * Mask as a scan-grid array (index py*w + px, 1 = valid i.e. alpha > 50, same rule as
+   * isValidPlacement), or null while the mask canvas is not loaded yet. Cached per mask.
+   */
+  function getMaskArray(type, faction, mapName) {
+    const data = maskCanvases[`${type}_${faction}_${mapName}`];
+    if (!data) return null;
+    if (!data.array) {
+      const rgba = data.ctx.getImageData(0, 0, data.width, data.height).data;
+      const arr = new Uint8Array(data.width * data.height);
+      for (let i = 0; i < arr.length; i++) arr[i] = rgba[i * 4 + 3] > 50 ? 1 : 0;
+      data.array = arr;
+    }
+    return data.array;
+  }
+
   async function loadRefAccess(faction, mapName) {
     try {
       const resp = await fetch(`data/refineries/ref_access_${faction}_${mapName}.json`);
@@ -550,6 +566,7 @@ const Layers = (() => {
     loadMaskOverlay,
     loadMaskCanvas,
     isValidPlacement,
+    getMaskArray,
     loadRefAccess,
     createRefAccessLayer,
     loadRampGrid,

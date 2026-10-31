@@ -354,7 +354,7 @@ const UI = (() => {
   }
 
   function formatSliderK(n) {
-    if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+    if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 ? 1 : 0)}K`;
     return `${n}`;
   }
 
@@ -521,5 +521,5 @@ const UI = (() => {
     }
   }
 
-  return { init, updateBalance };
+  return { init, updateBalance, importLayout };
 })();

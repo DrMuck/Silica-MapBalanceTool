@@ -61,6 +61,10 @@
           <input type="checkbox" id="layer-nobuild">
           <label for="layer-nobuild">No-Build Zones (Resource Extents)</label>
         </div>
+        <div class="layer-toggle">
+          <input type="checkbox" id="layer-territory" disabled>
+          <label for="layer-territory">Territory (generator)</label>
+        </div>
       </div>
 
       <!-- Measure Tool -->
@@ -111,7 +115,7 @@
         <h3>Resource Amounts</h3>
         <div class="setting-row">
           <span>Balterium</span>
-          <input type="range" id="setting-balt-amount" min="0" max="250000" value="40000" step="1000">
+          <input type="range" id="setting-balt-amount" min="0" max="250000" value="40000" step="500">
           <span class="setting-value" id="val-balt-amount">40K</span>
         </div>
         <div class="setting-row">
@@ -208,6 +212,79 @@
         </div>
       </div>
 
+      <!-- Spawn Generator (docs/SPAWN_GENERATOR.md section 7) -->
+      <div class="sidebar-section" id="gen-section">
+        <h3>Spawn Generator</h3>
+        <div class="gen-modes">
+          <label><input type="radio" name="gen-mode" id="gen-mode-hvh" value="hvh" checked> HvH</label>
+          <label><input type="radio" name="gen-mode" id="gen-mode-hva" value="hva"> HvA</label>
+          <label><input type="radio" name="gen-mode" id="gen-mode-hvhva" value="hvhva"> HvHvA</label>
+        </div>
+        <div class="setting-row">
+          <span>Seed</span>
+          <span class="gen-inline">
+            <input type="number" class="gen-num" id="gen-seed" value="1" min="0" step="1" style="width:96px;">
+            <button class="btn btn-clear gen-small-btn" id="gen-reseed" title="Draw a new random seed">Reseed</button>
+          </span>
+        </div>
+        <div class="setting-row">
+          <span>Enemy distance</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-dist" value="2700" min="800" max="5000" step="50"> m</span>
+        </div>
+        <div class="setting-row">
+          <span>Refinery radius</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-r-build" value="1000" min="100" max="5000" step="10"> m</span>
+        </div>
+        <div class="setting-row">
+          <span>HQ chain</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-r-chain" value="2500" min="100" max="6000" step="10"> m</span>
+        </div>
+        <div class="setting-row">
+          <span>Nest radius</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-r-nest" value="1200" min="100" max="5000" step="10"> m</span>
+        </div>
+        <div class="setting-row">
+          <span>Balterium patches</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-n-balt" value="0" min="0" step="1"> <span class="gen-of" id="gen-n-balt-of">of ? vanilla</span></span>
+        </div>
+        <div class="setting-row">
+          <span>Biotics patches</span>
+          <span class="gen-inline"><input type="number" class="gen-num" id="gen-n-bio" value="0" min="0" step="1"> <span class="gen-of" id="gen-n-bio-of">of ? vanilla</span></span>
+        </div>
+        <div class="setting-row">
+          <span>Exposure weight</span>
+          <input type="range" id="gen-w-exposure" min="0" max="3" value="1" step="0.1">
+          <span class="setting-value" id="val-gen-w-exposure">1.0</span>
+        </div>
+        <details class="gen-adv" id="gen-adv">
+          <summary>Advanced</summary>
+          <div class="setting-row">
+            <span>Control model</span>
+            <select id="gen-adv-control" class="gen-select">
+              <option value="geodesic" selected>geodesic</option>
+              <option value="euclidean">euclidean</option>
+            </select>
+          </div>
+          <div id="gen-adv-weights"></div>
+          <div class="setting-row">
+            <span>Exposure cut (pct)</span>
+            <span class="gen-inline"><input type="number" class="gen-num" id="gen-adv-expcut" value="75" min="1" max="100" step="1"> %</span>
+          </div>
+          <div class="setting-row">
+            <span>Results (topN)</span>
+            <input type="number" class="gen-num" id="gen-adv-topn" value="5" min="1" max="20" step="1">
+          </div>
+        </details>
+        <div class="gen-run-row">
+          <button class="btn btn-alien" id="gen-run">Generate</button>
+          <button class="btn btn-cent" id="gen-cancel" disabled>Cancel</button>
+        </div>
+        <progress id="gen-progress" max="1" value="0"></progress>
+        <div id="gen-status" class="gen-status"></div>
+        <div class="gen-status" id="gen-legend" title="Spawn Generator result rows">s = T2 share of each side's own resource type (S/C/A, hva H/A) &middot; gap = largest blank radius B/O &middot; yellow: score above 3.0, geometry limits fairness on this map</div>
+        <div id="gen-results"></div>
+      </div>
+
       <!-- Export / Import -->
       <div class="sidebar-section">
         <button class="btn btn-clear" id="btn-export">Export Layout JSON</button>
@@ -222,10 +299,21 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/map_config.js"></script>
+  <script src="js/terrain.js"></script>
+  <script src="js/gen/rng.js"></script>
+  <script src="js/gen/context.js"></script>
+  <script src="js/gen/grid.js"></script>
+  <script src="js/gen/candidates.js"></script>
+  <script src="js/gen/patches.js"></script>
+  <script src="js/gen/metrics.js"></script>
+  <script src="js/gen/search.js"></script>
+  <script src="js/gen/layout.js"></script>
+  <script src="js/gen/browser_adapter.js"></script>
   <script src="js/layers.js"></script>
   <script src="js/placement.js"></script>
   <script src="js/measure.js"></script>
   <script src="js/expansion.js"></script>
+  <script src="js/generator_ui.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 </body>

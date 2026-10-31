@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# Spawn Generator Node tools (T5)
+tools/node_modules/
+tools/out/
