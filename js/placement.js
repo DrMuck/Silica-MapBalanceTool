@@ -947,6 +947,8 @@ const Placement = (() => {
       hvhva: document.getElementById('mode-hvhva').checked,
       '4way': document.getElementById('mode-4way').checked,
     };
+    // Si_MapBalance 3.3.2: false = the mod never swaps Sol and Cent for this layout
+    layout.swap_spawns = document.getElementById('swap-spawns').checked;
 
     // KoH (single)
     if (koh) {

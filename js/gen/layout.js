@@ -98,6 +98,8 @@
         wildlifeBuildRadius: Rn, wildlifeNodeChainRange: ALIEN_CHAIN.node, wildlifeBiocacheChainRange: ALIEN_CHAIN.biocache,
       },
       game_modes,
+      // generated sets are fair either way round, so the mod's 50 % Sol/Cent swap stays on
+      swap_spawns: true,
       _meta: {
         generator: {
           version: VERSION,

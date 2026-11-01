@@ -491,6 +491,8 @@ const UI = (() => {
       document.getElementById('mode-hvhva').checked = data.game_modes.hvhva ?? true;
       document.getElementById('mode-4way').checked = data.game_modes['4way'] ?? false;
     }
+    // absent = the mod's default (swap on)
+    document.getElementById('swap-spawns').checked = data.swap_spawns !== false;
 
     // 9. KoH (single)
     if (data.koh && typeof data.koh === 'object') {

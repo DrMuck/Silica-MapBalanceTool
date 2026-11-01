@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-01 — Sol/Cent swap switch
+
+### Added
+- **Random Sol/Cent swap** checkbox under Game Modes, saved as `"swap_spawns"` in the layout JSON (Si_MapBalance 3.3.2+). Unticked = the mod keeps Sol and Cent on their own positions for this layout; ticked (default) = the 50 % swap in HvH / HvHvA as before. Layouts without the field load as ticked
+- Generated layouts carry `"swap_spawns": true`
+
 ## 2026-11-01 — Spawn Generator: random fair search
 
 ### Added
