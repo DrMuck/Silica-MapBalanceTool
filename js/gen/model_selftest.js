@@ -324,6 +324,31 @@
       && GenContext.placeMask(hq.ctx)[2] === 1 && sm[2] === 0 && hq.ev.metrics.kit.Sol === 2 && hq.set.Sol.nBalt === 2
       && GenContext.placeNEff(hq.ctx, 2, hq.set.Cent, 'Sol') === 100,
       { nEff: GenContext.placeNEff(hq.ctx, 2, hq.set.Sol, 'Sol'), kit: hq.ev.metrics.kit, nBalt: hq.set.Sol.nBalt, ease: hq.ev.metrics.placeEase });
+    // spec 15.9 swap off: Sol start = Sol factions only, Cent start = Cent only. Kit patch #0 is
+    // Cent-only placeable (Sol 5, Cent 200): it counts when the Cent spawn stands at (-1800, 0)
+    // (side B) but not when the Sol spawn does (side A); swap on it counts for neither.
+    const sNo = GenContext.defaultSettings(raw, { counts, swap: false });
+    const evSwap = (settings, solX) => {
+      const ctx = GenContext.build(raw, settings);
+      const at = (x, id) => GenCandidates.at(ctx, settings, 'human', Math.round((x - ctx.scan.minX) / ctx.scan.step), Math.round(ctx.scan.maxZ / ctx.scan.step), id);
+      const set = { Sol: at(solX, 'S'), Cent: at(-solX, 'C') };
+      const F = GenGrid.fields(ctx, settings, set, new Map());
+      const plan = { kept: { Balterium: res.map(p => p.idx), Biotics: [] }, removed: [], frozen: new Set(), kit: {}, rings: {}, gap: null, target: { Balterium: 15, Biotics: 0 } };
+      return { ctx, ev: Met.evaluate(ctx, settings, set, F, plan) };
+    };
+    const offA = evSwap(sNo, -1800), offB = evSwap(sNo, 1800), onB = evSwap(sOn, 1800);
+    add('swap setting: absent when on, false kept; global ineligible = placeable for neither faction ([] off vs [0, 8, 10, 14] on)',
+      !('swap' in sOn) && sNo.swap === false && offA.ctx.place.split && offA.ctx.place.ineligible.join() === '' && !onB.ctx.place.split,
+      { swapOn: 'swap' in sOn, ineligibleOff: offA.ctx.place.ineligible });
+    add('swap off: Cent-only patch #0 counts on side B (Cent spawn at its start, kit Cent 4) but not on side A (Sol spawn there, kit Sol 3); swap on: 3 either way',
+      offA.ev.metrics.kit.Sol === 3 && offB.ev.metrics.kit.Cent === 4 && onB.ev.metrics.kit.Cent === 3
+      && !GenContext.eligibleAt(offA.ctx, 0, { x: -1800, z: 0 }, 'Sol') && GenContext.eligibleAt(offA.ctx, 0, { x: -1800, z: 0 }, 'Cent'),
+      { offA: offA.ev.metrics.kit, offB: offB.ev.metrics.kit, onB: onB.ev.metrics.kit });
+    const pe2 = offB.ev.metrics.placeEase || {};
+    add('swap off: ease Sol has side A only, Cent side B only; T7 = |ease_Sol(A) - ease_Cent(B)| / 0.10',
+      pe2.Sol && pe2.Cent && pe2.Sol.B === undefined && pe2.Cent.A === undefined
+      && Math.abs(offB.ev.terms.T7 - Math.abs(pe2.Sol.A - pe2.Cent.B) / 0.10) < 1e-3,
+      { ease: pe2, T7: offB.ev.terms.T7 });
     // patch plan: the auto kit is equal on eligible patches, the ineligible kit patch is not
     // frozen; with 8 kept the fill takes eligible patches first, so no ineligible one is kept
     const c8 = { balterium: 8, biotics: 0 };

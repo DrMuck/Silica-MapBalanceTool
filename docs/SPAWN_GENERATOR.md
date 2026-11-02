@@ -1014,3 +1014,45 @@ Cent in the other half: evaluate `n_eff_F` with the HQ square of F for that same
 `n_eff_F >= minGood` for every required F. Cache per (patch idx, candidate id, F). With the
 toggle off nothing of this runs. Harness report adds, per map, the top result's kit patches with
 their n_good -> n_eff for Sol and Cent, and how many kit patches lost eligibility through the HQ.
+
+### 15.9 Swap switch (user request 2026-11-02)
+Setting `swap: true|false` (UI checkbox "Random Sol/Cent swap" in the generator section,
+default on; harness `--no-swap`). It is written to the layout as `swap_spawns` (was always true)
+and Apply sets the tool's own "Random Sol/Cent swap" checkbox to the same value so the export
+stays consistent. hva ignores it (one human).
+
+Factions per human side: swap on -> both sides {Sol, Cent}; swap off -> side A (the `Sol`
+spawn) {Sol}, side B (the `Cent` spawn) {Cent}; hva -> {Sol}. The placeability rule (15.4, 15.8)
+is evaluated per side with that side's faction set: eligibility of a side's kit/own-side patches
+needs `n_eff_F >= minGood` (n_good outside R_b) for every F of that side; T7 compares the sides
+with their own factions: swap on = mean over F of |ease_F(A) - ease_F(B)| as before, swap off =
+|ease_Sol(A) - ease_Cent(B)|. The global ineligible list (plan cut order, `_meta`) = patches
+failing for every faction in use on the map. With swap on every output must stay byte-identical
+to round 6 (default settings unchanged). `_meta.generator.swap` records the value.
+Harness: default run unchanged; `--no-swap` 39/39 rows with gates or a named reason, report the
+T7/ease columns per side with the side's faction.
+
+### 15.10 Outcome (swap switch, 2026-11-02)
+`settings.swap` is absent when on (the default) and `false` when off, so default settings,
+hashes and outputs are the round-6 bytes; `swap_spawns = settings.swap !== false`, and
+`_meta.generator.swap: false` (plus `placeability.sides`) appears only when off. Apply needs no
+extra code: `UI.importLayout` already sets the tool's `swap-spawns` checkbox from `swap_spawns`.
+`ctx.place` gains `split` (swap off, not hva), `sideF` ({Sol: [Sol], Cent: [Cent]} or the
+required set for both) and `sideMasks`; `GenContext.eligibleAt(ctx, k, pos, role)` takes the
+spawn role and checks that side's factions (n_good, and n_eff with that faction's HQ square
+inside R_b); without a role (candidates before they have a side) it means "eligible for some
+side". `sideMask(ctx, role)` feeds V(k) (`GenExpansion.curve(..., sideKey)`) and the layer zones;
+T2 counts a patch only for the sides that can use it (`softShares(..., ok)`); T7 with swap off =
+|ease_Sol(A) - ease_Cent(B)| / 0.10, ease reported only for the side's own faction. The global
+ineligible list = patches placeable for no faction in use. Stage 1 is unchanged (union count).
+
+Harness: default 39/39 result hashes and 117/117 layouts identical to the round-6 commit (fresh
+baseline taken before editing); `--no-swap`: 39/39 rows pass G1-G5, gap 39/39, determinism
+39/39, max 1.26 s, ineligible = placeable for neither (CrystalChasm 1 hvh/hvhva, else 0), T7 of
+the top-1 mean 0.43, max 3.51 (BlackIsle hvhva, ease Sol(A) 0.59 vs Cent(B) 0.94: with a fixed
+Sol side the Sol refinery's smaller footprint budget shows directly; hvh BlackIsle 1.46,
+CrystalChasm 1.42, others <= 0.74), 1 kit patch lost through the HQ (RiftBasin hvhva, Sol side);
+`--no-swap --no-placeability`: 39/39 pass. Selftests 505/505 (new: a Cent-only-placeable kit patch
+counts at the Cent start but not at the Sol start with swap off, for neither with swap on; T7 /
+ease per side). Headless Chrome: checkbox on by default; swap off -> download `swap_spawns: false`,
+`_meta.generator.swap: false`, Apply unticks the tool's swap checkbox; no console errors.

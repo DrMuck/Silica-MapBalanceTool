@@ -309,7 +309,7 @@
     if (C && C.placeMask && C.placeMask(ctx) && ctx.place.hasGoods) {
       const sm = C.setMask(ctx, set), inel = [];
       for (const h of hs) for (let k = 0; k < P.length; k++) {
-        if (P[k].type === 'Balterium' && h.c.pd[k] <= Rb && !C.eligibleAt(ctx, k, h.c)) inel.push(k);
+        if (P[k].type === 'Balterium' && h.c.pd[k] <= Rb && !C.eligibleAt(ctx, k, h.c, h.role)) inel.push(k);
       }
       parts.push('E:' + inel.join(',') + '/' + Array.from(sm).join(''));
     }

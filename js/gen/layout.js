@@ -98,8 +98,8 @@
         wildlifeBuildRadius: Rn, wildlifeNodeChainRange: ALIEN_CHAIN.node, wildlifeBiocacheChainRange: ALIEN_CHAIN.biocache,
       },
       game_modes,
-      // generated sets are fair either way round, so the mod's 50 % Sol/Cent swap stays on
-      swap_spawns: true,
+      // spec 15.9: the generator's swap setting (absent = on, the mod's 50 % Sol/Cent swap)
+      swap_spawns: settings.swap !== false,
       _meta: {
         generator: {
           version: VERSION,
@@ -116,6 +116,7 @@
           stats: ex.stats || null,
           ...(ex.random ? { random: ex.random } : {}),
           ...placeMeta(ctx, ex.stats, evaluation.metrics),
+          ...(settings.swap === false ? { swap: false } : {}),   // spec 15.9 (absent = on, round-6 bytes)
         },
       },
     };
@@ -129,10 +130,13 @@
    */
   function placeMeta(ctx, stats, metrics) {
     const p = ctx && typeof ctx === 'object' && ctx.place ? ctx.place : null;
-    const q = p ? { enabled: p.enabled, minGood: p.minGood, required: p.required, ineligibleIdx: p.ineligible } : stats && stats.placeability;
+    const q = p ? { enabled: p.enabled, minGood: p.minGood, required: p.required, ineligibleIdx: p.ineligible,
+      sides: p.split ? p.sideF : undefined } : stats && stats.placeability;
     if (!q) return {};
-    return { placeability: { enabled: q.enabled, minGood: q.minGood, required: (q.required || []).slice(),
-      ineligible: (q.ineligibleIdx || []).slice(), ease: (metrics && metrics.placeEase) || null } };
+    const out = { enabled: q.enabled, minGood: q.minGood, required: (q.required || []).slice(),
+      ineligible: (q.ineligibleIdx || []).slice(), ease: (metrics && metrics.placeEase) || null };
+    if (q.sides) out.sides = { Sol: q.sides.Sol.slice(), Cent: q.sides.Cent.slice() };   // spec 15.9, swap off
+    return { placeability: out };
   }
 
   /**

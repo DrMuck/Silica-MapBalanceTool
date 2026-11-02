@@ -47,6 +47,8 @@
     // absent (not {enabled: false}) when off, so the settings hash and every output stay the
     // round-5 bytes (same rule as `random`, spec 14.8)
     if (!placeOn(s)) delete s.placeability;
+    // spec 15.9: swap is absent when on (the default; round-6 bytes), false when off
+    if (s.swap !== false) delete s.swap;
     return s;
   }
 
@@ -82,6 +84,10 @@
   function buildPlace(raw, settings, patches) {
     if (!placeOn(settings)) return null;
     const required = placeRequired(settings.mode);
+    // spec 15.9: factions per human side (by spawn role). Swap on (default) or hva: every side
+    // needs every required faction; swap off: the Sol spawn needs Sol, the Cent spawn Cent.
+    const split = settings.swap === false && settings.mode !== 'hva';
+    const sideF = split ? { Sol: ['Sol'], Cent: ['Cent'] } : { Sol: required, Cent: required };
     const files = raw.placeability || {};
     const mg = settings.placeability.minGood, minGood = typeof mg === 'number' && mg >= 1 ? mg : PLACE_MIN_GOOD;
     const good = {}, nGood = {}, goods = {}, siteBox = {};
@@ -120,17 +126,26 @@
       }
       return { enabled: false, required, minGood, missing, mask: null, ineligible: [] };
     }
+    // mask = eligible for at least one side (n_good); the global ineligible list = patches that
+    // fail for every side's faction set (swap on: one set, so unchanged from round 6)
     const mask = new Uint8Array(patches.length), ineligible = [];
+    const sideMasks = split ? { Sol: new Uint8Array(patches.length), Cent: new Uint8Array(patches.length) } : null;
     for (let k = 0; k < patches.length; k++) {
       const p = patches[k];
-      const ok = p.type !== 'Balterium' || required.every(f => p.placeable[f] === true);
+      let ok;
+      if (!split) ok = p.type !== 'Balterium' || required.every(f => p.placeable[f] === true);
+      else {
+        for (const r of ['Sol', 'Cent']) sideMasks[r][k] = p.type !== 'Balterium' || sideF[r].every(f => p.placeable[f] === true) ? 1 : 0;
+        ok = !!(sideMasks.Sol[k] || sideMasks.Cent[k]);
+      }
       mask[k] = ok ? 1 : 0;
       if (!ok) ineligible.push(p.idx);
     }
     ineligible.sort((a, b) => a - b);
     const Rb = (settings.radii && settings.radii.build) || 1000;
     return { enabled: true, required, minGood, missing, mask, ineligible, nGood,
-      goods, siteBox, hasGoods: hasGoods && required.some(f => goods[f]), Rb, neff: new Map() };
+      goods, siteBox, hasGoods: hasGoods && required.some(f => goods[f]), Rb, neff: new Map(),
+      split, sideF, sideMasks: split ? sideMasks : { Sol: mask, Cent: mask } };
   }
 
   /**
@@ -181,19 +196,45 @@
     return nEff(ctx, k, pos, f);
   }
 
+  /** Side `role` (spawn role 'Sol' | 'Cent') passes for patch k with its HQ at pos (spec 15.9). */
+  function sidePass(ctx, k, pos, role) {
+    const p = ctx.place;
+    if (!p.sideMasks[role][k]) return false;
+    if (!p.hasGoods || ctx.patches[k].type !== 'Balterium') return true;
+    for (const f of p.sideF[role]) if (nEff(ctx, k, pos, f) < p.minGood) return false;
+    return true;
+  }
+
   /**
-   * THE eligibility rule (spec 15.4 / 15.8) of patch k as seen by a human structure at pos =
-   * {x, z, pd?}: Biotics always; Balterium when n_good >= minGood for every required faction
-   * (placeMask) and, for a patch within radii.build of pos, n_eff_F >= minGood for every required
-   * F (the HQ square of F at pos blocks its placements). Always true when the feature is off.
+   * THE eligibility rule (spec 15.4 / 15.8 / 15.9) of patch k as seen by the human structure of
+   * spawn role `role` ('Sol' | 'Cent') at pos = {x, z, pd?}: Biotics always; Balterium when
+   * n_good >= minGood for every faction of that side (swap on / hva: every required faction;
+   * swap off: Sol side Sol, Cent side Cent) and, for a patch within radii.build of pos, n_eff_F >=
+   * minGood for those F (the HQ square of F at pos blocks its placements). Without role (a
+   * candidate before it has a side): eligible for at least one side. Always true when off.
    */
-  function eligibleAt(ctx, k, pos) {
+  function eligibleAt(ctx, k, pos, role) {
     const p = ctx && ctx.place;
     if (!p || !p.enabled || !p.mask) return true;
     if (!p.mask[k]) return false;
+    if (p.split && ctx.patches[k].type !== 'Balterium') return true;
+    if (p.split) return role && p.sideF[role] ? sidePass(ctx, k, pos, role) : sidePass(ctx, k, pos, 'Sol') || sidePass(ctx, k, pos, 'Cent');
     if (!p.hasGoods || ctx.patches[k].type !== 'Balterium') return true;
     for (const f of p.required) if (nEff(ctx, k, pos, f) < p.minGood) return false;
     return true;
+  }
+
+  /** n_good mask of one side's faction set (spec 15.9; swap on = placeMask), null when off. */
+  function sideMask(ctx, role) {
+    const base = placeMask(ctx);
+    if (!base || !role || !ctx.place.split) return base;
+    return ctx.place.sideMasks[role] || base;
+  }
+
+  /** Factions of side `role` (spec 15.9), [] when the feature is inactive. */
+  function sideFactions(ctx, role) {
+    const p = ctx && ctx.place;
+    return p && p.enabled && p.sideF && p.sideF[role] ? p.sideF[role] : [];
   }
 
   /**
@@ -203,14 +244,14 @@
    */
   function setMask(ctx, set) {
     const base = placeMask(ctx);
-    if (!base || !ctx.place.hasGoods) return base;
+    if (!base || (!ctx.place.hasGoods && !ctx.place.split)) return base;
     const out = Uint8Array.from(base), P = ctx.patches, Rb = ctx.place.Rb, hs = [];
-    for (const r of ['Sol', 'Cent']) if (set && set[r] && hs.indexOf(set[r]) < 0) hs.push(set[r]);
-    for (const h of hs) {
+    for (const r of ['Sol', 'Cent']) if (set && set[r] && !hs.some(h => h.c === set[r])) hs.push({ c: set[r], role: r });
+    for (const { c: h, role } of hs) {
       for (let k = 0; k < P.length; k++) {
         if (!out[k] || P[k].type !== 'Balterium') continue;
         const d = h.pd ? h.pd[k] : Math.hypot(P[k].x - h.x, P[k].z - h.z);
-        if (d <= Rb && !eligibleAt(ctx, k, h)) out[k] = 0;
+        if (d <= Rb && !eligibleAt(ctx, k, h, role)) out[k] = 0;
       }
     }
     return out;
@@ -232,8 +273,10 @@
   function placeStats(ctx) {
     const p = ctx && ctx.place;
     if (!p) return null;
-    return { enabled: p.enabled, minGood: p.minGood, required: p.required.slice(), ineligible: p.ineligible.length,
+    const out = { enabled: p.enabled, minGood: p.minGood, required: p.required.slice(), ineligible: p.ineligible.length,
       missing: p.missing.slice(), ineligibleIdx: p.ineligible.slice() };
+    if (p.split) out.sides = { Sol: p.sideF.Sol.slice(), Cent: p.sideF.Cent.slice() };   // spec 15.9, swap off only
+    return out;
   }
 
   function resourceList(resources) {
@@ -314,5 +357,5 @@
   }
 
   return { build, defaultSettings, resourceList, placeOn, placeRequired, placeMask, placeNGood, placeStats, PLACE_MIN_GOOD,
-    HQ_FOOT, eligibleAt, setMask, placeNEff, countFree };
+    HQ_FOOT, eligibleAt, setMask, placeNEff, countFree, sideMask, sideFactions };
 }));

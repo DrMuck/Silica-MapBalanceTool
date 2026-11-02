@@ -5,6 +5,7 @@
 //                             [--no-determinism] [--no-seed-check] [--no-selftest] [--strict]
 //                             [--no-placeability]   (any mode: refinery placeability off, spec 15.4)
 //                             [--min-good N]        (eligible = n_good >= N; default 10, spec 15.4)
+//                             [--no-swap]           (settings.swap = false: Sol start Sol only, Cent start Cent only, spec 15.9)
 //   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
 //   node tools/gen_harness.js [--kit N] [--nest M] ...            exact start kits (spec 13) on every run
 //   node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps ..] [--modes ..]
@@ -56,7 +57,12 @@ const PLACE_FACTIONS = ['Sol', 'Cent'];
 let PLACE_ON = true;   // spec 15.4 default; --no-placeability sets false
 /** Settings override of the placeability toggle (GenContext.defaultSettings drops the key when off). */
 let PLACE_MIN = null;  // --min-good N: eligibility threshold (settings.placeability.minGood; engine default 10)
-function placeOver() { return { placeability: PLACE_MIN ? { enabled: PLACE_ON, minGood: PLACE_MIN } : { enabled: PLACE_ON } }; }
+let SWAP_ON = true;     // spec 15.9 default; --no-swap sets false
+function placeOver() {
+  const o = { placeability: PLACE_MIN ? { enabled: PLACE_ON, minGood: PLACE_MIN } : { enabled: PLACE_ON } };
+  if (!SWAP_ON) o.swap = false;
+  return o;
+}
 /** The threshold the runs use: --min-good, else the engine default (GenContext.PLACE_MIN_GOOD, 10). */
 function minGoodUsed() {
   if (PLACE_MIN) return PLACE_MIN;
@@ -161,7 +167,9 @@ function placeCounts(raw) {
   return {
     total: balt.length, Sol: n('Sol'), Cent: n('Cent'), both,
     missing: PLACE_FACTIONS.filter(f => !good[f]),
-    ineligible: { hva: n('Sol') === null ? null : balt.length - n('Sol'), hvh: both === null ? null : balt.length - both, hvhva: both === null ? null : balt.length - both },
+    ineligible: { hva: n('Sol') === null ? null : balt.length - n('Sol'), hvh: both === null ? null : balt.length - both, hvhva: both === null ? null : balt.length - both,
+      // spec 15.9 swap off: ineligible = placeable for neither faction
+      either: good.Sol && good.Cent ? balt.filter(p => !good.Sol.has(p.idx) && !good.Cent.has(p.idx)).length : null },
   };
 }
 
@@ -427,7 +435,8 @@ function hqKitOf(E, ctx, settings, ev) {
     for (let k = 0; k < P.length; k++) {
       if (P[k].type !== 'Balterium' || Math.hypot(P[k].x - c.x, P[k].z - c.z) > Rb) continue;
       const ng = f => (p.nGood[f] ? p.nGood[f][k] : null), ne = f => (p.nGood[f] ? C.placeNEff(ctx, k, c, f) : null);
-      const elig = C.eligibleAt(ctx, k, c), viaHq = p.mask[k] === 1 && !elig;
+      const sm = C.sideMask ? C.sideMask(ctx, side) : p.mask;
+      const elig = C.eligibleAt(ctx, k, c, side), viaHq = sm[k] === 1 && !elig;
       if (viaHq) lost++;
       if (elig && kept.has(P[k].idx)) kit++;
       const flag = (elig ? 'k' : viaHq ? 'h' : 'n') + (!elig && kept.has(P[k].idx) ? '+' : '');
@@ -475,6 +484,7 @@ function checkLayout(L, mode, raw, settings, ev) {
   }
   if (res.patch_overrides && Object.keys(res.patch_overrides).length) issues.push('patch_overrides not empty');
   if (!L._meta || !L._meta.generator) issues.push('_meta.generator missing');
+  if (L.swap_spawns !== (settings.swap !== false)) issues.push(`swap_spawns ${L.swap_spawns} != setting`);   // spec 15.9
   return issues;
 }
 
@@ -551,7 +561,8 @@ function writeReport(outDir, rows, extra) {
 
   if (rows.some(r => r.placeCounts)) {
     L.push('## Refinery placeability (spec 15.4)', '');
-    L.push(`Setting: ${PLACE_ON ? 'on' : 'off (--no-placeability)'}. Balterium patches of the map; placeable = n_good >= ${minGoodUsed()} in ` +
+    L.push(`Setting: ${PLACE_ON ? 'on' : 'off (--no-placeability)'}${SWAP_ON ? '' : ', swap off (--no-swap: Sol start = Sol only, ' +
+      'Cent start = Cent only; ease Sol shows side A, ease Cent side B; T7 = |ease_Sol(A) - ease_Cent(B)|; ineligible = placeable for neither)'}. Balterium patches of the map; placeable = n_good >= ${minGoodUsed()} in ` +
       'data/refineries/ref_place_{Sol,Cent}_<Map>.json; ineligible = not placeable for every required faction ' +
       '(hva: Sol; hvh / hvhva: Sol and Cent) = left out of the human kits, V(k) and T2. engine = GenResult.stats.placeability.ineligible ' +
       'per mode (must equal the file count; "off" when the setting is off, "missing" when a file is absent).', '');
@@ -663,6 +674,7 @@ function parseArgs(argv) {
     else if (k === '--strict') a.strict = true;
     else if (k === '--no-placeability') a.placeability = false;
     else if (k === '--min-good') a.placeMin = ints(k, next())[0];
+    else if (k === '--no-swap') a.swap = false;
     else if (k === '--layout') a.layouts.push(path.resolve(next()));
     else if (k === '--kit') a.kit = ints(k, next())[0];
     else if (k === '--nest') a.nest = ints(k, next())[0];
@@ -673,7 +685,7 @@ function parseArgs(argv) {
     else if (k === '--band') a.band = ints(k, next()).slice(0, 2);
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
-        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M] [--no-placeability] [--min-good N]\n' +
+        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M] [--no-placeability] [--min-good N] [--no-swap]\n' +
         'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]\n' +
         'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]\n' +
         'node tools/gen_harness.js --random N [--band lo,hi] [--maps A,B] [--modes ..]');
@@ -1011,6 +1023,7 @@ async function randomMode(args) {
 async function main() {
   const args = parseArgs(process.argv);
   if (args.placeability === false) PLACE_ON = false;
+  if (args.swap === false) SWAP_ON = false;
   if (args.placeMin >= 1) PLACE_MIN = args.placeMin;
   if (args.layouts.length) return layoutMode(args);
   if (args.sweepKit || args.sweepNest) return sweepMode(args);
@@ -1150,7 +1163,8 @@ async function main() {
   if (PLACE_ON) {
     const pr = rows.filter(r => !r.error && r.placeCounts);
     const missing = pr.filter(r => !r.placeability || !r.placeability.enabled);
-    const bad = pr.filter(r => r.placeability && r.placeability.enabled && r.placeability.ineligible !== r.placeCounts.ineligible[r.mode]);
+    const want = r => (!SWAP_ON && r.mode !== 'hva' ? r.placeCounts.ineligible.either : r.placeCounts.ineligible[r.mode]);
+    const bad = pr.filter(r => r.placeability && r.placeability.enabled && r.placeability.ineligible !== want(r));
     const t7 = pr.filter(r => r.terms && typeof r.terms.T7 === 'number').map(r => r.terms.T7);
     checks.push(`placeability on (minGood ${minGoodUsed()}): T7 on the top-1 max ${t7.length ? f2(Math.max(...t7)) : '-'}, ` +
       `mean ${t7.length ? f2(t7.reduce((a, b) => a + b, 0) / t7.length) : '-'}; ineligible per row ${pr.map(r => (r.placeability && r.placeability.enabled ? r.placeability.ineligible : 0)).reduce((a, b) => a + b, 0)} total`);
@@ -1161,7 +1175,7 @@ async function main() {
     checks.push(`placeability on: ${pr.length - missing.length}/${pr.length} runs active; ineligible count = file count on ` +
       `${pr.length - missing.length - bad.length}/${pr.length - missing.length}` +
       (missing.length ? `; off (file missing): ${missing.map(r => `${r.map} ${r.mode}`).join(', ')}` : '') +
-      (bad.length ? `; MISMATCH ${bad.map(r => `${r.map} ${r.mode} ${r.placeability.ineligible} != ${r.placeCounts.ineligible[r.mode]}`).join(', ')}` : ''));
+      (bad.length ? `; MISMATCH ${bad.map(r => `${r.map} ${r.mode} ${r.placeability.ineligible} != ${want(r)}`).join(', ')}` : ''));
     if (bad.length) fatal = true;
   } else {
     const on = rows.filter(r => !r.error && (r.placeability || (r.terms && 'T7' in r.terms)));

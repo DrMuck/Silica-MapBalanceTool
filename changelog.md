@@ -7,6 +7,7 @@
 - New score term **T7 placement ease balance** (weight 0.5, only with the checkbox on): compares how easy the start patches are to build on for each side
 - Generated layouts carry `_meta.generator.placeability` (threshold, ineligible patches, ease per faction and side); with the checkbox off the output is exactly as before
 - `tools/gen_harness.js --no-placeability`, `--min-good N`; the report lists per map the placeable / ineligible counts, T7, ease and the start patches' placement counts with and without the HQ
+- **Random Sol/Cent swap** checkbox in the Spawn Generator (default on): unticked, the layout is written with `swap_spawns: false` (Apply also unticks the tool's swap checkbox) and the Sol start is judged with the Sol refinery and HQ only, the Cent start with the Centauri ones; harness `--no-swap`
 
 ## 2026-11-02 — Refinery placeability layers
 

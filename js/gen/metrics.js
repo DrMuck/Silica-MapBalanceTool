@@ -29,7 +29,9 @@
   /** GenContext.placeNGood (spec 15.4): {F: n_good per patch k} of the required factions, or null. */
   function placeNGood(ctx) { const C = Ctx(); return C && C.placeNGood ? C.placeNGood(ctx) : null; }
   /** GenContext.eligibleAt / setMask / placeNEff (spec 15.8: eligibility with the HQ footprint). */
-  function eligibleAt(ctx, k, pos) { return Ctx().eligibleAt(ctx, k, pos); }
+  function eligibleAt(ctx, k, pos, role) { return Ctx().eligibleAt(ctx, k, pos, role); }
+  /** spec 15.9: swap off splits the factions by side (ctx.place.split). */
+  function splitSides(ctx) { return !!(ctx && ctx.place && ctx.place.enabled && ctx.place.split); }
   function setMask(ctx, set) { const C = Ctx(); return C && C.setMask ? C.setMask(ctx, set) : null; }
 
   const EASE_CAP = 200;   // spec 15.4: n_good saturates at 200 (~ Sol's median)
@@ -49,9 +51,10 @@
     for (const f of Object.keys(ng)) {
       out[f] = {};
       humans.forEach((sd, i) => {
+        if (C.sideFactions(ctx, sd.key).indexOf(f) < 0) return;   // spec 15.9: the side's own factions
         let sum = 0, n = 0;
         for (const k of m.kept.Balterium) {
-          if (sd.cand.pd[k] > Rb || !eligibleAt(ctx, k, sd.cand)) continue;
+          if (sd.cand.pd[k] > Rb || !eligibleAt(ctx, k, sd.cand, sd.key)) continue;
           sum += Math.min(Math.max(C.placeNEff(ctx, k, sd.cand, f), 0), EASE_CAP) / EASE_CAP;
           n++;
         }
@@ -62,8 +65,12 @@
     return out;
   }
 
-  /** T7 = mean over the required factions of |ease_F(A) - ease_F(B)|, scaled / 0.10 like T2/T3; 0 in hva. */
-  function t7Of(ease) {
+  /**
+   * T7 = mean over the required factions of |ease_F(A) - ease_F(B)|, scaled / 0.10 like T2/T3; 0
+   * in hva. split (swap off, spec 15.9): |ease_Sol(A) - ease_Cent(B)| / 0.10.
+   */
+  function t7Of(ease, split) {
+    if (split) return ease && ease.Sol && ease.Cent ? Math.abs((ease.Sol.A || 0) - (ease.Cent.B || 0)) / 0.10 : 0;
     const fs = Object.keys(ease || {});
     if (!fs.length) return 0;
     let s = 0;
@@ -237,7 +244,7 @@
    * soft territory (0 when the type has no value). Resources unreachable from every side count
    * in neither.
    */
-  function softShares(D, v, typeOf, sideType, tau) {
+  function softShares(D, v, typeOf, sideType, tau, ok) {
     const ns = D.length, nr = v.length, T = new Float64Array(ns), e = new Float64Array(ns), tot = {};
     for (let r = 0; r < nr; r++) {
       let dmin = Infinity;
@@ -249,7 +256,8 @@
         e[s] = isFinite(d) ? Math.exp(-(d - dmin) / tau) : 0;
         sum += e[s];
       }
-      for (let s = 0; s < ns; s++) if (sideType[s] === typeOf[r]) T[s] += v[r] * e[s] / sum;
+      // ok[s][r] = 0: resource r does not count for side s (spec 15.9, swap off); absent = counts
+      for (let s = 0; s < ns; s++) if (sideType[s] === typeOf[r] && (!ok || !ok[s] || ok[s][r])) T[s] += v[r] * e[s] / sum;
       tot[typeOf[r]] = (tot[typeOf[r]] || 0) + v[r];
     }
     const sh = new Float64Array(ns);
@@ -346,7 +354,7 @@
       const r0 = sd.human ? R.build : R.nest, r1 = r0 + R.chain, v = amountOf(settings, type);
       let n0 = 0, n1 = 0, dn = Infinity;
       for (const k of kept[type]) {
-        if (el && !eligibleAt(ctx, k, sd.cand)) continue;   // spec 15.4 / 15.8: in no human kit
+        if (el && !eligibleAt(ctx, k, sd.cand, sd.key)) continue;   // spec 15.4 / 15.8 / 15.9: in no human kit
         const d = pd[k];
         if (d <= r0) n0++;
         else if (d <= r1) n1++;
@@ -378,7 +386,7 @@
       if (!sd.human) return;
       const idx = fsides ? fsides.indexOf(sd.key) : s;
       const others = m.sides.filter(o => o.cand !== sd.cand).map(o => o.cand);
-      const r = X.curve(ctx, settings, sd.cand, idx, m.fields || null, keptBalt, K, others);
+      const r = X.curve(ctx, settings, sd.cand, idx, m.fields || null, keptBalt, K, others, sd.key);
       keys.push(sd.key);
       Vs.push(r.V);
       res[sd.key] = r;
@@ -504,7 +512,7 @@
       id: 'T7', kind: 'soft', modes: ALL, weight: 0.5, label: 'T7 placement ease balance',
       active(ctx) { return !!placeNGood(ctx); },
       compute(ctx, settings, set, m) {
-        return m.mode === 'hva' ? 0 : t7Of(easeOf(ctx, m));
+        return m.mode === 'hva' ? 0 : t7Of(easeOf(ctx, m), splitSides(ctx));
       },
     },
   ];
@@ -553,7 +561,17 @@
       for (const a of D) if (isFinite(a[r])) { any = true; break; }
       if (!any) m.sides.forEach((sd, s) => { D[s][r] = sd.cand.pd[ks[r]]; });
     }
-    const r = softShares(D, v, typeOf, m.sides.map(s => s.type), tau);
+    // spec 15.9: with swap off a patch counts only for the sides whose factions can use it
+    let ok = null;
+    if (el && splitSides(ctx)) {
+      ok = m.sides.map(sd => {
+        if (!sd.human) return null;
+        const a = new Uint8Array(ks.length);
+        for (let r = 0; r < ks.length; r++) a[r] = typeOf[r] !== 'Balterium' || eligibleAt(ctx, ks[r], sd.cand, sd.key) ? 1 : 0;
+        return a;
+      });
+    }
+    const r = softShares(D, v, typeOf, m.sides.map(s => s.type), tau, ok);
     const T = {}, sh = {};
     m.sides.forEach((sd, s) => { T[sd.key] = r.T[s]; sh[sd.key] = r.s[s]; });
     return { T, s: sh };

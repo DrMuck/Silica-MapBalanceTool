@@ -85,6 +85,8 @@
     if (typeof v.nestKitExact === 'number') s.nestKitExact = v.nestKitExact;
     // spec 14.1: random fair search; absent (not null) when off, so a normal run's hash is unchanged
     if (v.random) s.random = { runs: v.random.runs, band: v.random.band.slice() };
+    // spec 15.9: Sol/Cent swap; absent when on (the default), false when off
+    if (v.swap === false) s.swap = false;
     // spec 15.4: count only placeable Balterium (n_good >= minGood, default 10) and score T7;
     // absent when off, and weights.T7 dropped, so the settings hash stays the round-5 one
     if (v.placeability) {

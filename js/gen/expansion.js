@@ -80,7 +80,7 @@
    * structure in `others` (optional array of {x, z}); without others nothing is excluded.
    * layer = own-side kept Balterium with R_b < d(r, s_i) <= reach*R_c + R_b.
    */
-  function curve(ctx, settings, spawn, sideIndex, fields, keptBalt, K, others) {
+  function curve(ctx, settings, spawn, sideIndex, fields, keptBalt, K, others, sideKey) {
     const pr = params(settings), Rb = pr.Rb, reachM = pr.reach * pr.Rc;
     if (!(K > 0)) K = pr.K;
     const exp = prepare(ctx, settings);
@@ -97,7 +97,8 @@
 
     if (elig.length < nP) { elig = new Uint8Array(nP); got = new Uint8Array(nP); }
     let layer = 0;
-    const layerR = reachM + Rb, place = C().placeMask(ctx);
+    // spec 15.4 / 15.9: n_good eligibility of this side's factions (sideKey = spawn role; none = any side)
+    const layerR = reachM + Rb, place = C().sideMask(ctx, sideKey);
     for (let k = 0; k < nP; k++) {
       elig[k] = 0; got[k] = 0;
       if (P[k].type !== 'Balterium' || (keptBalt && !keptBalt[k]) || (place && !place[k])) continue;

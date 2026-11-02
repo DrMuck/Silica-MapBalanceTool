@@ -92,7 +92,7 @@
     const nBal = vanilla.Balterium;
     const inR = humans.map(hm => {
       const a = new Uint8Array(nP);
-      for (let k = 0; k < nP; k++) if (P[k].type === 'Balterium' && (!el || C().eligibleAt(ctx, k, hm.c)) && distTo(ctx, hm.c, k) <= R.build) a[k] = 1;
+      for (let k = 0; k < nP; k++) if (P[k].type === 'Balterium' && (!el || C().eligibleAt(ctx, k, hm.c, hm.role)) && distTo(ctx, hm.c, k) <= R.build) a[k] = 1;
       return a;
     });
     let kH = 0;
@@ -352,7 +352,7 @@
       const t = r === 'Alien' ? 'Biotics' : 'Balterium', R0 = r === 'Alien' ? R.nest : R.build, R1 = R0 + R.chain;
       const r0 = { n: 0, amount: 0 }, r1 = { n: 0, amount: 0 };
       for (let k = 0; k < nP; k++) {
-        if (!keep[k] || P[k].type !== t || (el && !C().eligibleAt(ctx, k, c))) continue;
+        if (!keep[k] || P[k].type !== t || (el && !C().eligibleAt(ctx, k, c, r))) continue;
         const d = distTo(ctx, c, k);
         if (d <= R0) { r0.n++; r0.amount += amountOf(P[k]); }
         else if (d <= R1) { r1.n++; r1.amount += amountOf(P[k]); }
@@ -403,11 +403,12 @@
     for (const r of ['Sol', 'Cent', 'Alien']) if (set[r] && !structs.includes(set[r])) structs.push(set[r]);
     const own = fields && fields.owner && fields.sides ? fields : null, PC = ctx.ctrl.patchCell;
     const zone = new Int8Array(nP).fill(-1), el = C().setMask(ctx, set);
+    const sms = humans.map(h => C().sideMask(ctx, h.role));   // spec 15.9: the side's own factions
     for (let k = 0; k < nP; k++) {
       if (P[k].type !== 'Balterium' || (el && !el[k])) continue;   // spec 15.4: not in any layer
       for (let i = 0; i < humans.length; i++) {
         const d = distTo(ctx, humans[i].c, k);
-        if (d <= R.build || d > layerR) continue;
+        if (d <= R.build || d > layerR || (sms[i] && !sms[i][k])) continue;
         let mine;
         if (own) {
           const o = own.owner[PC[k]];

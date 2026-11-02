@@ -174,6 +174,7 @@ const GeneratorUI = (() => {
       nestKitExact: exactKit('gen-adv-nestkit'),
       placeability: $('gen-placeable') ? $('gen-placeable').checked : true,   // spec 15.4
       minGood: Math.max(1, Math.round(num('gen-adv-mingood', 10))),
+      swap: $('gen-swap') ? $('gen-swap').checked : true,   // spec 15.9 (Apply sets swap-spawns via UI.importLayout)
       random: $('gen-random').checked ? {
         runs: Math.max(2, Math.min(60, Math.round(num('gen-random-runs', 12)))),
         band: [num('gen-random-dlo', 1600), num('gen-random-dhi', 3800)],
@@ -387,7 +388,7 @@ const GeneratorUI = (() => {
     const p = st && st.placeability;
     if (!p) return '';
     if (!p.enabled) return ` · placeability off: ref_place file missing (${(p.missing || []).join(', ')})`;
-    return ` · ${p.ineligible} Balterium with < ${p.minGood} usable placements not counted (${(p.required || []).join('+')})`;
+    return ` · ${p.ineligible} Balterium with < ${p.minGood} usable placements not counted (${p.sides ? 'swap off: Sol start Sol, Cent start Cent' : (p.required || []).join('+')})`;
   }
 
   function renderResults(wallMs) {
