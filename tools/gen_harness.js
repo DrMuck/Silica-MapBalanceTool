@@ -3,6 +3,8 @@
 //
 //   node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir]
 //                             [--no-determinism] [--no-seed-check] [--no-selftest] [--strict]
+//                             [--no-placeability]   (any mode: refinery placeability off, spec 15.4)
+//                             [--min-good N]        (eligible = n_good >= N; default 10, spec 15.4)
 //   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
 //   node tools/gen_harness.js [--kit N] [--nest M] ...            exact start kits (spec 13) on every run
 //   node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps ..] [--modes ..]
@@ -31,6 +33,13 @@
 // an empty result without a reason, ms > N x 3000, a determinism miss (first row), a top set
 // that a normal run with its own settings on a fresh ctx does not reproduce, two presented
 // sets not distinct, a pair distance outside the band filter or fair > score.
+//
+// Placeability (spec 15.4 / 15.5): every mode runs with settings.placeability = {enabled: true}
+// (GenRaw.placeability = data/refineries/ref_place_{Sol,Cent}_<Map>.json); --no-placeability
+// turns it off, which must reproduce the round-5 outputs byte for byte. The normal report adds
+// a per-map table (Balterium total, placeable Sol / Cent / both, ineligible per mode) and the
+// spec 15.5 runtime check (ms <= 1500 per run); exact-kit re-counts skip the layout's
+// _meta.generator.placeability.ineligible patches.
 'use strict';
 
 const fs = require('fs');
@@ -43,6 +52,16 @@ const JS = path.join(ROOT, 'js');
 const GEN = process.env.GEN_DIR ? path.resolve(process.env.GEN_DIR) : path.join(JS, 'gen');   // override: test stubs
 const MODES = ['hvh', 'hva', 'hvhva'];
 const AMOUNTS = { balterium: 40000, biotics: 42000 };   // tool slider defaults (spec 10.3)
+const PLACE_FACTIONS = ['Sol', 'Cent'];
+let PLACE_ON = true;   // spec 15.4 default; --no-placeability sets false
+/** Settings override of the placeability toggle (GenContext.defaultSettings drops the key when off). */
+let PLACE_MIN = null;  // --min-good N: eligibility threshold (settings.placeability.minGood; engine default 10)
+function placeOver() { return { placeability: PLACE_MIN ? { enabled: PLACE_ON, minGood: PLACE_MIN } : { enabled: PLACE_ON } }; }
+/** The threshold the runs use: --min-good, else the engine default (GenContext.PLACE_MIN_GOOD, 10). */
+function minGoodUsed() {
+  if (PLACE_MIN) return PLACE_MIN;
+  try { return require(path.join(GEN, 'context.js')).PLACE_MIN_GOOD || 10; } catch (e) { return 10; }
+}
 
 // ── loading ───────────────────────────────────────────────────────────────
 
@@ -110,9 +129,40 @@ function loadRaw(mapName, MAP_CONFIG) {
   };
   const resources = JSON.parse(fs.readFileSync(path.join(DATA, 'resources', `${base}.json`), 'utf8'));
   const { heights, meta } = readHeights(base);
-  const raw = { mapName, cfg, resources, masks, heights, heightsMeta: meta };
+  const raw = { mapName, cfg, resources, masks, heights, heightsMeta: meta, placeability: loadPlaceability(mapName, base) };
   rawCache.set(mapName, raw);
   return raw;
+}
+
+/** GenRaw.placeability (spec 15.4): {Sol, Cent: ref_place JSON | null}, own map file else the base map's. */
+function loadPlaceability(mapName, base) {
+  const out = {};
+  for (const f of PLACE_FACTIONS) {
+    const own = path.join(DATA, 'refineries', `ref_place_${f}_${mapName}.json`);
+    const file = fs.existsSync(own) ? own : path.join(DATA, 'refineries', `ref_place_${f}_${base}.json`);
+    out[f] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+  }
+  return out;
+}
+
+/**
+ * Placeability counts of a map straight from its files (independent of the engine): Balterium
+ * total, placeable for Sol / Cent / both, ineligible per mode (hva: not Sol; hvh / hvhva: not both).
+ */
+function placeCounts(raw) {
+  const good = {}, minGood = minGoodUsed();
+  for (const f of PLACE_FACTIONS) {
+    const j = raw.placeability && raw.placeability[f];
+    if (j && Array.isArray(j.patches)) good[f] = new Set(j.patches.filter(q => (q.n_good || 0) >= minGood).map(q => q.idx));
+  }
+  const balt = (raw.resources.resources || []).filter(p => p.type === 'Balterium' && p.active !== false);
+  const n = f => (good[f] ? balt.filter(p => good[f].has(p.idx)).length : null);
+  const both = good.Sol && good.Cent ? balt.filter(p => good.Sol.has(p.idx) && good.Cent.has(p.idx)).length : null;
+  return {
+    total: balt.length, Sol: n('Sol'), Cent: n('Cent'), both,
+    missing: PLACE_FACTIONS.filter(f => !good[f]),
+    ineligible: { hva: n('Sol') === null ? null : balt.length - n('Sol'), hvh: both === null ? null : balt.length - both, hvhva: both === null ? null : balt.length - both },
+  };
 }
 
 function vanillaCounts(resources) {
@@ -201,7 +251,7 @@ const cell = s => String(s).replace(/\|/g, '/');
 
 function runOne(E, raw, mode, seed, exact) {
   // the engine's defaults when it has them (same values as defaultSettings above)
-  const over = { mode, seed };
+  const over = Object.assign({ mode, seed }, placeOver());
   if (exact && exact.kit != null) over.kitExact = exact.kit;
   if (exact && exact.nest != null && mode !== 'hvh') over.nestKitExact = exact.nest;
   const settings = typeof E.GenContext.defaultSettings === 'function'
@@ -252,7 +302,10 @@ function isExact(settings) {
 function layoutKits(L, raw, mode) {
   const rm = new Set((L.resources && L.resources.removed_patches) || []);
   const st = L.settings || {}, sp = L.spawns || {};
-  const kept = (raw.resources.resources || []).filter(p => p.active !== false && !rm.has(p.idx));
+  // spec 15.4: ineligible Balterium (the layout's own list) is in no human kit
+  const pl = L._meta && L._meta.generator && L._meta.generator.placeability;
+  const inel = new Set(pl && pl.enabled ? pl.ineligible || [] : []);
+  const kept = (raw.resources.resources || []).filter(p => p.active !== false && !rm.has(p.idx) && !inel.has(p.idx));
   const count = (s, type, R) => (s ? kept.filter(p => p.type === type && Math.hypot(p.x - s.x, p.z - s.z) <= R).length : null);
   const out = { Sol: count((sp.Sol || [])[0], 'Balterium', st.solBuildRadius || 1000) };
   if (mode !== 'hva') out.Cent = count((sp.Cent || [])[0], 'Balterium', st.centBuildRadius || st.solBuildRadius || 1000);
@@ -281,6 +334,12 @@ function summarize(raw, mode, seed, run, E) {
     timing: stats.timing || null,
     gapVanilla: vanillaGap(E, raw, ctx),
   };
+  // spec 15.5: the engine's placeability stats (absent when off) next to the file counts
+  if (stats.placeability) {
+    const q = stats.placeability;
+    row.placeability = { enabled: q.enabled, required: q.required, ineligible: q.ineligible, missing: q.missing };
+  }
+  row.placeCounts = placeCounts(raw);
   if (isExact(settings)) {
     row.exact = { kit: settings.kitExact, nest: mode === 'hvh' ? null : settings.nestKitExact };
     row.kitRange = stats.kitRange || null;
@@ -319,6 +378,8 @@ function summarize(raw, mode, seed, run, E) {
   row.T = m.T || null;
   row.expansion = m.expansion || null;
   row.expRatio = m.expansionRatio || null;
+  row.placeEase = m.placeEase || null;   // spec 15.4 (absent when placeability is off)
+  row.hqKit = hqKitOf(E, ctx, settings, ev);   // spec 15.8 (null when off)
   // G5 (spec 12.6): does any presented set pass it (the top-1 then must, unless it ranks on fewer gate fails)
   row.g5Shown = result.candidates.map(e => !(e.gateFails || []).includes('G5'));
   if (ev.plan && ev.plan.kept) {
@@ -343,6 +404,40 @@ function summarize(raw, mode, seed, run, E) {
     row.layoutKit = layoutKits(row.layouts[0].layout, raw, mode);
   }
   return row;
+}
+
+/**
+ * Spec 15.8 report of the top-1: per human side, every Balterium within R_b of its start with
+ * n_good -> n_eff for Sol and Cent (HQ square of that faction at the start) and a flag: k = kept
+ * and eligible (kit), h = eligible by n_good but lost through the HQ footprint, n = ineligible by
+ * n_good already; '+' = kept anyway (filler). null when the feature is inactive.
+ */
+function hqKitOf(E, ctx, settings, ev) {
+  const C = E.GenContext, p = ctx.place;
+  if (!p || !p.enabled || !C.eligibleAt) return null;
+  const Rb = (settings.radii && settings.radii.build) || 1000, P = ctx.patches;
+  const kept = new Set(ev.plan && ev.plan.kept ? ev.plan.kept.Balterium : []);
+  const out = {}, seen = [];
+  for (const side of ['Sol', 'Cent']) {
+    const c = ev.set[side];
+    if (!c || seen.includes(c)) continue;
+    seen.push(c);
+    const list = [];
+    let lost = 0, kit = 0;
+    for (let k = 0; k < P.length; k++) {
+      if (P[k].type !== 'Balterium' || Math.hypot(P[k].x - c.x, P[k].z - c.z) > Rb) continue;
+      const ng = f => (p.nGood[f] ? p.nGood[f][k] : null), ne = f => (p.nGood[f] ? C.placeNEff(ctx, k, c, f) : null);
+      const elig = C.eligibleAt(ctx, k, c), viaHq = p.mask[k] === 1 && !elig;
+      if (viaHq) lost++;
+      if (elig && kept.has(P[k].idx)) kit++;
+      const flag = (elig ? 'k' : viaHq ? 'h' : 'n') + (!elig && kept.has(P[k].idx) ? '+' : '');
+      if (!elig || kept.has(P[k].idx)) {
+        list.push({ idx: P[k].idx, flag, Sol: [ng('Sol'), ne('Sol')], Cent: [ng('Cent'), ne('Cent')] });
+      }
+    }
+    out[side] = { kit, lost, patches: list };
+  }
+  return out;
 }
 
 /** Contract checks on a layout JSON (spec 8.1, T3 verify). */
@@ -434,11 +529,11 @@ function writeReport(outDir, rows, extra) {
     'G5 (spec 12.2) is reported separately: a top-1 G5 fail is a miss only if a presented set passes G5.', '');
 
   L.push('## Summary', '');
-  L.push('| map | mode | ms | ctx | run | stages cand/s1/s2/ref | cand h/a | s1/s2 sets | results | gate fails | score | T1 | T2 | T3 | T4 | T6 | status |');
-  L.push('|---|---|--:|--:|--:|---|---|---|--:|---|--:|--:|--:|--:|--:|--:|---|');
+  L.push('| map | mode | ms | ctx | run | stages cand/s1/s2/ref | cand h/a | s1/s2 sets | results | gate fails | score | T1 | T2 | T3 | T4 | T6 | T7 | status |');
+  L.push('|---|---|--:|--:|--:|---|---|---|--:|---|--:|--:|--:|--:|--:|--:|--:|---|');
   for (const r of rows) {
     if (r.error) {
-      L.push(`| ${r.map} | ${r.mode} | - | - | - | - | - | - | - | - | - | - | - | - | - | - | ERROR ${cell(r.error)} |`);
+      L.push(`| ${r.map} | ${r.mode} | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | ERROR ${cell(r.error)} |`);
       continue;
     }
     const c = r.candidates || {};
@@ -450,9 +545,52 @@ function writeReport(outDir, rows, extra) {
     const stages = r.timing ? `${f0(tm.candidates)}/${f0(tm.stage1)}/${f0(tm.stage2)}/${f0(tm.refine)}` : '-';
     L.push(`| ${r.map} | ${r.mode} | ${f0(r.ms)} | ${f0(r.buildMs)} | ${f0(r.searchMs)} | ${stages} | ${f0(c.human)}/${f0(c.alien)} | ` +
       `${f0(r.stage1Sets)}/${f0(r.stage2Sets)} | ${r.nResults} | ${r.gateFails ? (r.gateFails.join(',') || '-') : 'n/a'} | ${f2(r.score)} | ` +
-      `${f2(t.T1)} | ${f2(t.T2)} | ${f2(t.T3)} | ${f2(t.T4)} | ${f2(t.T6)} | ${status} |`);
+      `${f2(t.T1)} | ${f2(t.T2)} | ${f2(t.T3)} | ${f2(t.T4)} | ${f2(t.T6)} | ${f2(t.T7)} | ${status} |`);
   }
   L.push('');
+
+  if (rows.some(r => r.placeCounts)) {
+    L.push('## Refinery placeability (spec 15.4)', '');
+    L.push(`Setting: ${PLACE_ON ? 'on' : 'off (--no-placeability)'}. Balterium patches of the map; placeable = n_good >= ${minGoodUsed()} in ` +
+      'data/refineries/ref_place_{Sol,Cent}_<Map>.json; ineligible = not placeable for every required faction ' +
+      '(hva: Sol; hvh / hvhva: Sol and Cent) = left out of the human kits, V(k) and T2. engine = GenResult.stats.placeability.ineligible ' +
+      'per mode (must equal the file count; "off" when the setting is off, "missing" when a file is absent).', '');
+    L.push('Per map x mode: Balterium total; placeable Sol / Cent / both from the files; eligible / ineligible = the engine\'s count ' +
+      'for the mode (GenResult.stats.placeability, must equal the file count); T7 = placement ease balance of the top-1 ' +
+      '(mean over required factions of |ease(A) - ease(B)|, / 0.10); ease F A/B = mean min(n_good_F, 200)/200 over the kit ' +
+      'Balterium of the Sol (A) / Cent (B) start.', '');
+    L.push('| map | mode | Balterium | placeable Sol | placeable Cent | both | eligible | ineligible | T7 | ease Sol A/B | ease Cent A/B |');
+    L.push('|---|---|--:|--:|--:|--:|--:|--:|--:|---|---|');
+    const easeTxt = (e, f) => (e && e[f] ? [e[f].A, e[f].B].filter(v => v !== undefined).map(f2).join('/') : '-');
+    for (const r of rows) {
+      if (r.error || !r.placeCounts) continue;
+      const c = r.placeCounts, q = r.placeability;
+      const inel = !q ? 'off' : q.enabled ? String(q.ineligible) : `missing ${q.missing.join('+')}`;
+      const elig = q && q.enabled ? String(c.total - q.ineligible) : '-';
+      L.push(`| ${r.map} | ${r.mode} | ${c.total} | ${c.Sol ?? '-'} | ${c.Cent ?? '-'} | ${c.both ?? '-'} | ${elig} | ${inel} | ` +
+        `${f2((r.terms || {}).T7)} | ${easeTxt(r.placeEase, 'Sol')} | ${easeTxt(r.placeEase, 'Cent')} |`);
+    }
+    L.push('');
+  }
+
+  if (rows.some(r => r.hqKit)) {
+    L.push('## HQ footprint (spec 15.8, top-1)', '');
+    L.push('Per human start: Balterium within R_b that is in the kit or ineligible, as `idx flag S n_good>n_eff C n_good>n_eff`; ' +
+      'n_eff = GOOD placements whose site box misses the HQ square of that faction (Sol 131 m, Cent 95 m) at the start. ' +
+      'flag k = kit (kept, eligible), h = lost through the HQ (n_good ok, n_eff < minGood), n = ineligible by n_good, + = kept as filler. ' +
+      'lost = h count.', '');
+    L.push('| map | mode | side | kit | lost via HQ | patches |');
+    L.push('|---|---|---|--:|--:|---|');
+    for (const r of rows) {
+      if (r.error || !r.hqKit) continue;
+      for (const side of Object.keys(r.hqKit)) {
+        const h = r.hqKit[side];
+        const ps = h.patches.map(q => `${q.idx}${q.flag} S${q.Sol[0] ?? '-'}>${q.Sol[1] ?? '-'} C${q.Cent[0] ?? '-'}>${q.Cent[1] ?? '-'}`).join(', ');
+        L.push(`| ${r.map} | ${r.mode} | ${short(side)} | ${h.kit} | ${h.lost} | ${ps || '-'} |`);
+      }
+    }
+    L.push('');
+  }
 
   L.push('## Expansion layer (top-1, spec 12)', '');
   L.push('V(1..K) = Balterium grabbed by the best 1..K expansion HQs per human (greedy, own side, outside the kit); ' +
@@ -523,6 +661,8 @@ function parseArgs(argv) {
     else if (k === '--no-seed-check') a.seedCheck = false;
     else if (k === '--no-selftest') a.selftest = false;
     else if (k === '--strict') a.strict = true;
+    else if (k === '--no-placeability') a.placeability = false;
+    else if (k === '--min-good') a.placeMin = ints(k, next())[0];
     else if (k === '--layout') a.layouts.push(path.resolve(next()));
     else if (k === '--kit') a.kit = ints(k, next())[0];
     else if (k === '--nest') a.nest = ints(k, next())[0];
@@ -533,7 +673,7 @@ function parseArgs(argv) {
     else if (k === '--band') a.band = ints(k, next()).slice(0, 2);
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
-        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M]\n' +
+        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M] [--no-placeability] [--min-good N]\n' +
         'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]\n' +
         'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]\n' +
         'node tools/gen_harness.js --random N [--band lo,hi] [--maps A,B] [--modes ..]');
@@ -575,6 +715,7 @@ function evalLayout(E, file, MAP_CONFIG) {
     mode, seed: meta.seed !== undefined ? meta.seed : 1,
     radii: { build: ls.solBuildRadius || 1000, chain: ls.solChainRange || 2500, nest: ls.alienBuildRadius || 1200 },
     counts: meta.counts || { balterium: kept.Balterium.length, biotics: kept.Biotics.length },
+    ...placeOver(),
   };
   for (const k of ['enemyDistance', 'minKit', 'minKitAlien', 'edgeMargin', 'controlModel']) if (meta[k] !== undefined) over[k] = meta[k];
   const settings = E.GenContext.defaultSettings(raw, over);
@@ -756,7 +897,7 @@ async function sweepMode(args) {
 function randomSettings(E, raw, mode, seed, runs, band) {
   const R = E.GenRandom;
   const d0 = Math.max(1300, Math.min(2700, Math.round((0.9 * raw.cfg.extent) / 50) * 50));
-  return E.GenContext.defaultSettings(raw, { mode, seed, random: { runs, band: band || R.defaultBand(d0) } });
+  return E.GenContext.defaultSettings(raw, Object.assign({ mode, seed, random: { runs, band: band || R.defaultBand(d0) } }, placeOver()));
 }
 
 async function randomMode(args) {
@@ -869,6 +1010,8 @@ async function randomMode(args) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  if (args.placeability === false) PLACE_ON = false;
+  if (args.placeMin >= 1) PLACE_MIN = args.placeMin;
   if (args.layouts.length) return layoutMode(args);
   if (args.sweepKit || args.sweepNest) return sweepMode(args);
   if (args.random) return randomMode(args);
@@ -1000,6 +1143,31 @@ async function main() {
     (five.length < rows.length ? `; short: ${rows.filter(r => !five.includes(r)).map(r => `${r.map} ${r.mode} ${r.nResults || 0}`).join(', ')}` : ''));
   const msBad = rows.filter(r => !r.error && (typeof r.ms === 'number' ? r.ms : r.searchMs) > 3000);
   checks.push(`ms <= 3000: ${rows.length - msBad.length}/${rows.length}; max ${f0(Math.max(...rows.filter(r => !r.error).map(r => r.ms || 0)))} ms`);
+  // spec 15.5: runtime <= 1.5 s per run; engine ineligible count = the file count per mode
+  const ms15 = rows.filter(r => !r.error && (typeof r.ms === 'number' ? r.ms : r.searchMs) > 1500);
+  checks.push(`ms <= 1500 (spec 15.5): ${rows.length - ms15.length}/${rows.length}` +
+    (ms15.length ? `; over: ${ms15.map(r => `${r.map} ${r.mode} ${f0(r.ms)}`).join(', ')}` : ''));
+  if (PLACE_ON) {
+    const pr = rows.filter(r => !r.error && r.placeCounts);
+    const missing = pr.filter(r => !r.placeability || !r.placeability.enabled);
+    const bad = pr.filter(r => r.placeability && r.placeability.enabled && r.placeability.ineligible !== r.placeCounts.ineligible[r.mode]);
+    const t7 = pr.filter(r => r.terms && typeof r.terms.T7 === 'number').map(r => r.terms.T7);
+    checks.push(`placeability on (minGood ${minGoodUsed()}): T7 on the top-1 max ${t7.length ? f2(Math.max(...t7)) : '-'}, ` +
+      `mean ${t7.length ? f2(t7.reduce((a, b) => a + b, 0) / t7.length) : '-'}; ineligible per row ${pr.map(r => (r.placeability && r.placeability.enabled ? r.placeability.ineligible : 0)).reduce((a, b) => a + b, 0)} total`);
+    const hq = pr.filter(r => r.hqKit);
+    const lostRows = hq.filter(r => Object.values(r.hqKit).some(h => h.lost > 0));
+    checks.push(`HQ footprint (spec 15.8): top-1 kit patches lost through the HQ: ${hq.reduce((a, r) => a + Object.values(r.hqKit).reduce((b, h) => b + h.lost, 0), 0)} ` +
+      `on ${lostRows.length}/${hq.length} rows` + (lostRows.length ? ` (${lostRows.map(r => `${r.map} ${r.mode} ${Object.entries(r.hqKit).map(([s, h]) => `${short(s)}${h.lost}`).join('/')}`).join(', ')})` : ''));
+    checks.push(`placeability on: ${pr.length - missing.length}/${pr.length} runs active; ineligible count = file count on ` +
+      `${pr.length - missing.length - bad.length}/${pr.length - missing.length}` +
+      (missing.length ? `; off (file missing): ${missing.map(r => `${r.map} ${r.mode}`).join(', ')}` : '') +
+      (bad.length ? `; MISMATCH ${bad.map(r => `${r.map} ${r.mode} ${r.placeability.ineligible} != ${r.placeCounts.ineligible[r.mode]}`).join(', ')}` : ''));
+    if (bad.length) fatal = true;
+  } else {
+    const on = rows.filter(r => !r.error && (r.placeability || (r.terms && 'T7' in r.terms)));
+    checks.push(`placeability off (--no-placeability): ${on.length ? `FAIL stats.placeability / T7 present on ${on.length} rows` : 'no run carries stats.placeability or T7'}`);
+    if (on.length) fatal = true;
+  }
   checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${rows.filter(r => !r.error && r.nResults === 0 && !r.infeasible).length} without candidates` +
     `, ${rows.filter(r => r.infeasible).length} infeasible)`);
   if (exact) {

@@ -12,16 +12,19 @@
 // count over the unfiltered spots.
 // Human candidates carry v1solo = GenExpansion.solo (spec 12.2: best single expansion cell,
 // enemies ignored, vanilla Balterium), the stage-1 expansion proxy.
+// Placeability (spec 15.4, GenContext.placeMask): ineligible Balterium is not counted in the
+// human counts (nBalt, ring1, the bin score, the exact-kit filter and maxKit).
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(require('../terrain.js'), require('./grid.js'), root, require('./expansion.js'));
-  } else root.GenCandidates = factory(null, null, root, null);
-}(typeof self !== 'undefined' ? self : this, function (TerrainMod, GenGridMod, root, ExpMod) {
+    module.exports = factory(require('../terrain.js'), require('./grid.js'), root, require('./expansion.js'), require('./context.js'));
+  } else root.GenCandidates = factory(null, null, root, null, null);
+}(typeof self !== 'undefined' ? self : this, function (TerrainMod, GenGridMod, root, ExpMod, CtxMod) {
   'use strict';
 
   const T = () => TerrainMod || root.Terrain;
   const G = () => GenGridMod || root.GenGrid;
   const X = () => ExpMod || root.GenExpansion;
+  const C = () => CtxMod || root.GenContext;
 
   const HUMAN_FOOTPRINT = 67;   // circumscribed HQ footprint radius (m)
 
@@ -99,12 +102,14 @@
     const x = sc.minX + px * sc.step, z = sc.maxZ - py * sc.step;
     const r = (settings && settings.radii) || {};
     const Rb = r.build || 1000, Rc = r.chain || 2500, Rn = r.nest || 1200;
-    const P = ctx.patches, pd = new Float32Array(P.length);
+    const P = ctx.patches, pd = new Float32Array(P.length), el = C().placeMask(ctx), pos = { x, z, pd };
     let nBalt = 0, nBio = 0, ring1 = 0;
     const own = role === 'alien' ? 'Biotics' : 'Balterium', R0 = role === 'alien' ? Rn : Rb;
     for (let k = 0; k < P.length; k++) {
       const d = Math.hypot(P[k].x - x, P[k].z - z);
       pd[k] = d;
+      // spec 15.4 / 15.8: ineligible Balterium (for an HQ here) counts nowhere
+      if (el && !C().eligibleAt(ctx, k, pos)) continue;
       if (P[k].type === 'Balterium' && d <= Rb) nBalt++;
       if (P[k].type === 'Biotics' && d <= Rn) nBio++;
       if (P[k].type === own && d > R0 && d <= R0 + Rc) ring1++;
@@ -122,9 +127,10 @@
 
   function countWithin(ctx, type, x, z, R) {
     let n = 0;
-    const R2 = R * R;
-    for (const p of ctx.patches) {
-      if (p.type !== type) continue;
+    const R2 = R * R, P = ctx.patches, el = C().placeMask(ctx), pos = { x, z };
+    for (let k = 0; k < P.length; k++) {
+      const p = P[k];
+      if (p.type !== type || (el && !C().eligibleAt(ctx, k, pos))) continue;
       const dx = p.x - x, dz = p.z - z;
       if (dx * dx + dz * dz <= R2) n++;
     }

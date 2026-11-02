@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-02 — Spawn Generator: count only placeable Balterium
+
+### Added
+- **Count only placeable Balterium** checkbox in the Spawn Generator (default on) and **Min. usable placements** (Advanced, default 10): a Balterium patch counts for the starting kits, the expansion curve and the resource shares only when the refinery of every faction that can start there (HvA: Sol; HvH / HvHvA: Sol and Centauri, the mod swaps sides) has at least that many placements with the harvester ramp facing the patch. Near a start the placements the HQ itself blocks are left out (Sol HQ 131 m, Cent 95 m square). Unplaceable patches are kept only as filler; the patch totals do not change
+- New score term **T7 placement ease balance** (weight 0.5, only with the checkbox on): compares how easy the start patches are to build on for each side
+- Generated layouts carry `_meta.generator.placeability` (threshold, ineligible patches, ease per faction and side); with the checkbox off the output is exactly as before
+- `tools/gen_harness.js --no-placeability`, `--min-good N`; the report lists per map the placeable / ineligible counts, T7, ease and the start patches' placement counts with and without the HQ
+
+## 2026-11-02 — Refinery placeability layers
+
+### Added
+- **Refinery layers** control under Layers: faction (Sol / Cent) and rotation (0 / 90 / 180 / 270 / off, default off). Shows where a refinery can stand at that rotation: grey = valid but no usable harvester ramp, blue = ramp reaches the ground but faces no Balterium, green = ramp faces a Balterium patch within 150 m. While shown, Balterium patches with no such placement for the faction get a red outline
+- `preprocess.py` step [7] writes `data/refineries/ref_layer_{Sol,Cent}_<Map>_r{000,090,180,270}.png` (bit-coded grayscale) and `ref_place_{Sol,Cent}_<Map>.json` (per patch: number of good placements, closest one) from the refinery scans, plus a per-map summary line. Existing `ref_access_*` / `ramp_grid_*` files are unchanged
+- Placements whose site box (Sol pad +10 m on every side, Cent pad) touches any Balterium or Biotics field are dropped, as vanilla rejects them (`ConstructionPreview.GetObstructed`)
+- With this rule every Balterium patch on all 13 maps is still placeable for both factions, but Sol has 38-64 % of Cent's good placements per patch and a few Sol patches have fewer than 10 (docs/SPAWN_GENERATOR.md §15.6)
+
 ## 2026-11-01 — Sol/Cent swap switch
 
 ### Added

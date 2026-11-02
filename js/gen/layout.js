@@ -115,9 +115,24 @@
           expansion: expansionMeta(settings, evaluation.metrics),
           stats: ex.stats || null,
           ...(ex.random ? { random: ex.random } : {}),
+          ...placeMeta(ctx, ex.stats, evaluation.metrics),
         },
       },
     };
+  }
+
+  /**
+   * _meta.generator.placeability (spec 15.4) = {enabled, minGood, required, ineligible: [idx...],
+   * ease: {F: {A, B}} | null} from ctx.place (GenContext.build) or, when ctx is a {map} stub,
+   * from GenResult.stats.placeability; ease = evaluation.metrics.placeEase. Nothing (no key)
+   * when the setting was off, so those layouts keep the round-5 bytes.
+   */
+  function placeMeta(ctx, stats, metrics) {
+    const p = ctx && typeof ctx === 'object' && ctx.place ? ctx.place : null;
+    const q = p ? { enabled: p.enabled, minGood: p.minGood, required: p.required, ineligibleIdx: p.ineligible } : stats && stats.placeability;
+    if (!q) return {};
+    return { placeability: { enabled: q.enabled, minGood: q.minGood, required: (q.required || []).slice(),
+      ineligible: (q.ineligibleIdx || []).slice(), ease: (metrics && metrics.placeEase) || null } };
   }
 
   /**

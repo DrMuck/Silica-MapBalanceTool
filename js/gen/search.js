@@ -11,11 +11,11 @@
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory(require('./rng.js'), require('./grid.js'), require('./candidates.js'),
-      require('./patches.js'), require('./metrics.js'), root);
+      require('./patches.js'), require('./metrics.js'), root, require('./context.js'));
   } else {
-    root.GenSearch = factory(null, null, null, null, null, root);
+    root.GenSearch = factory(null, null, null, null, null, root, null);
   }
-}(typeof self !== 'undefined' ? self : this, function (RngMod, GridMod, CandMod, PatchMod, MetMod, root) {
+}(typeof self !== 'undefined' ? self : this, function (RngMod, GridMod, CandMod, PatchMod, MetMod, root, CtxMod) {
   'use strict';
 
   const Rng = () => RngMod || root.GenRng;
@@ -23,6 +23,7 @@
   const Cand = () => CandMod || root.GenCandidates;
   const Patches = () => PatchMod || root.GenPatches;
   const Met = () => MetMod || root.GenMetrics;
+  const Ctx = () => CtxMod || root.GenContext;
 
   const VERSION = '1.0.0';
   const REFINE_TOP = 6;
@@ -303,6 +304,15 @@
     }
     // the layer cap (spec 12.3) reads each human's layer zone, so the plan depends on it too
     if (hs.length > 1) parts.push('Z:' + Patches().layerZones(ctx, s, set, fields).join(','));
+    // spec 15.8: kit eligibility depends on the HQ position (footprint), not only on the orders
+    const C = Ctx();
+    if (C && C.placeMask && C.placeMask(ctx) && ctx.place.hasGoods) {
+      const sm = C.setMask(ctx, set), inel = [];
+      for (const h of hs) for (let k = 0; k < P.length; k++) {
+        if (P[k].type === 'Balterium' && h.c.pd[k] <= Rb && !C.eligibleAt(ctx, k, h.c)) inel.push(k);
+      }
+      parts.push('E:' + inel.join(',') + '/' + Array.from(sm).join(''));
+    }
     return parts.join('|');
   }
 
@@ -477,6 +487,9 @@
       humanMax: cs.human && typeof cs.human.maxKit === 'number' ? cs.human.maxKit : null,
       alienMax: mode !== 'hvh' && cs.alien && typeof cs.alien.maxKit === 'number' ? cs.alien.maxKit : null,
     };
+    // spec 15.4: {enabled, required, ineligible, missing, ineligibleIdx}; absent when the setting is off
+    const place = Ctx() && Ctx().placeStats ? Ctx().placeStats(ctx) : null;
+    if (place) result.stats.placeability = place;
     const infeasible = (reason, detail, text) => {
       result.candidates = [];
       result.infeasible = { reason, detail };
@@ -611,7 +624,9 @@
       out.fail = { reason: 'nest_budget', detail: `Nest kit needs ${out.alien} Biotics, total is ${totO}` };
     } else if (out.human !== null && H.length < nH) {
       const max = range && range.humanMax != null ? range.humanMax : '?';
-      out.fail = { reason: 'kit_candidates', detail: `${H.length} HQ spot(s) reach ${out.human} Balterium within ${Rb} m, ${nH} needed; max reachable on this map: ${max}` };
+      // spec 15.5: with placeability on, the counts are placeable Balterium only
+      const pl = Ctx() && Ctx().placeMask ? Ctx().placeMask(ctx) : null;
+      out.fail = { reason: 'kit_candidates', detail: `${H.length} HQ spot(s) reach ${out.human}${pl ? ' placeable' : ''} Balterium within ${Rb} m, ${nH} needed; max reachable on this map: ${max}` };
     } else if (out.alien !== null && !A.length) {
       const max = range && range.alienMax != null ? range.alienMax : '?';
       out.fail = { reason: 'nest_candidates', detail: `no Nest spot reaches ${out.alien} Biotics within ${Rn} m; max: ${max}` };

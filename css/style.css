@@ -63,6 +63,17 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 .layer-toggle label { cursor: pointer; }
 
+/* Refinery placeability layers (spec 15.3) */
+.ref-layer-ctl select {
+  padding: 1px 3px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.ref-layer-img { image-rendering: pixelated; }
+
 /* Placement buttons */
 .btn {
   display: block;

@@ -7,6 +7,7 @@ Reads raw dump/scan files from UserData\\MapBalance\\ and produces:
   - data/resources/*.json   (resource area positions per map)
   - data/masks/*.png        (RGBA placement masks for HQ/refinery per faction)
   - data/refineries/*.json  (per-resource refinery accessibility + ramp dirs)
+  - data/refineries/ref_layer_*.png + ref_place_*.json (refinery placeability, spec 15.2)
   - js/map_config.js        (auto-generated per-map metadata)
 
 Usage:
@@ -29,6 +30,15 @@ DATA_DIR = SCRIPT_DIR / "data"
 SCAN_DIR = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\UserData\MapBalance")
 MAPREPLAY_DIR = Path(r"E:\Steam\steamapps\common\Silica Dedicated Server\Mod MapReplay")
 ASSETS_PAK = MAPREPLAY_DIR / "assets.pak"
+
+# Refinery placeability (spec 15.2): a harvester-ramp placement is GOOD for a Balterium patch when
+# its entry point is within PLACE_D_GOOD m of the patch rectangle and faces it (align >= PLACE_ALIGN_GOOD).
+PLACE_D_GOOD = 150
+PLACE_ALIGN_GOOD = 0.7
+# Vanilla ConstructionPreview.GetObstructed rejects a site whose non-Entry construction bounds touch a
+# non-empty ResourceArea (any type). Site box = AboveGroundPoints extent of the scan header plus the
+# prefab's ConstructionBoundsMin/MaxOffset (Si_RefineryPlacement/analysis/refinery_dump.json).
+REFINERY_SITE_OFFSET = {"Sol": 10.0, "Cent": 0.0}
 
 # Add MapReplay modules to path for AssetPack
 sys.path.insert(0, str(MAPREPLAY_DIR / "modules"))
@@ -524,6 +534,252 @@ def generate_ramp_grid(map_name, faction):
     print(f"  [OK] Ramp grid {faction} {map_name}: {n_any} cells with ramp data -> {out_path.name}")
 
 
+def parse_refinery_platform_box(filepath):
+    """Local XZ extent (x0, x1, z0, z1) of the 'AboveGroundPoints' of a refinery scan header, or None."""
+    xs, zs = [], []
+    on = False
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith("=== CSV DATA"):
+                break
+            if line.startswith("---"):
+                on = line.startswith("--- AboveGroundPoints")
+                continue
+            m = re.match(r'\s*\(([-\d.]+), ([-\d.]+), ([-\d.]+)\)', line)
+            if on and m:
+                xs.append(float(m.group(1)))
+                zs.append(float(m.group(3)))
+    if not xs:
+        return None
+    return min(xs), max(xs), min(zs), max(zs)
+
+
+def parse_harvester_ramp_entries(filepath):
+    """Return {"A": |entryLocal|_xz, "B": ...} for the two harvester ramps of a refinery scan.
+
+    The 'Ramps' section lists every ramp as `[i] type=... check=(...) entry=(x,y,z)`; the
+    'Harvester ramps' summary maps `Ramp A (idx n)` / `Ramp B (idx m)` to those indices, in the
+    same order as the CSV rampA/rampB columns.
+    """
+    entries = {}
+    harvester = {}
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith("=== CSV DATA"):
+                break
+            m = re.match(r'\s*\[(\d+)\] type=\w+ check=\([^)]*\) entry=\(([-\d.]+),([-\d.]+),([-\d.]+)\)', line)
+            if m:
+                entries[int(m.group(1))] = (float(m.group(2)), float(m.group(4)))
+                continue
+            m = re.match(r'\s*Ramp ([AB]) \(idx (\d+)\)', line)
+            if m:
+                harvester[m.group(1)] = int(m.group(2))
+    out = {}
+    for ramp, idx in harvester.items():
+        if idx in entries:
+            ex, ez = entries[idx]
+            out[ramp] = float(np.hypot(ex, ez))
+    return out
+
+
+def generate_refinery_layers(map_name, faction, resources=None):
+    """Refinery placeability layers + per-patch placeability (spec 15.2).
+
+    Writes data/refineries/ref_layer_{faction}_{map}_r{000,090,180,270}.png (8-bit grayscale on the
+    scan grid, bit0 valid, bit1/2 rampA/B ok, bit3/4 rampA/B GOOD for some Balterium patch) and
+    data/refineries/ref_place_{faction}_{map}.json. Placements whose site box (platform extent +
+    REFINERY_SITE_OFFSET, rotated by the yaw) touches any resource rectangle are dropped (vanilla
+    rejects them). Each remaining ramp placement is attributed to the nearest Balterium rectangle
+    (P = nearest point to the ramp entry E). Returns the set of
+    Balterium idx with n_good >= 1, or None when the scan or the resources are missing.
+    """
+    scan_file = find_latest_file(f"refinery_scan_{faction}_{map_name}_*.txt")
+    if not scan_file:
+        print(f"  [WARN] No refinery scan for {faction} {map_name}")
+        return None
+    meta, csv_start = parse_scan_header(scan_file)
+    if csv_start is None or 'scan_step' not in meta:
+        print(f"  [WARN] No CSV data in {scan_file}")
+        return None
+    entry_len = parse_harvester_ramp_entries(scan_file)
+    if 'A' not in entry_len or 'B' not in entry_len:
+        print(f"  [WARN] No harvester ramp entries in {scan_file}")
+        return None
+    box = parse_refinery_platform_box(scan_file)
+    if box is None:
+        print(f"  [WARN] No AboveGroundPoints in {scan_file}")
+        return None
+
+    if not resources:
+        res_path = DATA_DIR / "resources" / f"{map_name}.json"
+        if not res_path.exists():
+            print(f"  [WARN] No resources JSON for {map_name}")
+            return None
+        with open(res_path) as f:
+            resources = json.load(f).get("resources", [])
+
+    step = meta['scan_step']
+    min_x, max_z = meta['scan_min_x'], meta['scan_max_z']
+    grid_w, grid_h = meta['grid_w'], meta['grid_h']
+
+    # CSV: x,z,rot,terrainY,adjustY,finalY,rampA_ok,rampA_dirX,rampA_dirZ,rampB_ok,rampB_dirX,rampB_dirZ
+    data = np.loadtxt(scan_file, delimiter=',', skiprows=csv_start,
+                      usecols=(0, 1, 2, 6, 7, 8, 9, 10, 11), ndmin=2)
+    rot = np.rint(data[:, 2]).astype(np.int32) % 360
+
+    # Drop sites whose box touches a resource rectangle (Balterium or Biotics; Unity Bounds.Intersects
+    # counts touching). Yaw maps local (x, z) to world (x cos + z sin, -x sin + z cos).
+    off = REFINERY_SITE_OFFSET.get(faction, 0.0)
+    bx0, bx1, bz0, bz1 = box[0] - off, box[1] + off, box[2] - off, box[3] + off
+    local = {0: (bx0, bx1, bz0, bz1), 90: (bz0, bz1, -bx1, -bx0),
+             180: (-bx1, -bx0, -bz1, -bz0), 270: (-bz1, -bz0, bx0, bx1)}
+    lx0, lx1, lz0, lz1 = (np.zeros(len(rot)) for _ in range(4))
+    for r, (a, b, c, d_) in local.items():
+        sel = rot == r
+        lx0[sel], lx1[sel], lz0[sel], lz1[sel] = a, b, c, d_
+    sx0, sx1 = data[:, 0] + lx0, data[:, 0] + lx1
+    sz0, sz1 = data[:, 1] + lz0, data[:, 1] + lz1
+    clear = np.isin(rot, list(local.keys()))
+    for r in resources:
+        if not r.get('world_w') or not r.get('world_h'):
+            continue
+        rx0, rx1 = r['x'] - r['world_w'] / 2, r['x'] + r['world_w'] / 2
+        rz0, rz1 = r['z'] - r['world_h'] / 2, r['z'] + r['world_h'] / 2
+        clear &= ~((sx0 <= rx1) & (sx1 >= rx0) & (sz0 <= rz1) & (sz1 >= rz0))
+    n_scan = len(data)
+    data, rot = data[clear], rot[clear]
+    x, z = data[:, 0], data[:, 1]
+    n = len(x)
+
+    balt = [r for r in resources if r.get('type') == 'Balterium']
+    rect = np.array([[r['x'] - r['world_w'] / 2, r['x'] + r['world_w'] / 2,
+                      r['z'] - r['world_h'] / 2, r['z'] + r['world_h'] / 2] for r in balt],
+                    dtype=np.float64).reshape(-1, 4)
+
+    per_ramp = {}  # ramp -> (ok mask, rows, d, align, nearest patch k, is_good)
+    for ramp, c_ok, c_dx, c_dz in (("A", 3, 4, 5), ("B", 6, 7, 8)):
+        ok = data[:, c_ok] > 0.5
+        rows = np.nonzero(ok)[0]
+        dx, dz = data[rows, c_dx], data[rows, c_dz]
+        norm = np.hypot(dx, dz)
+        norm[norm == 0] = 1.0
+        dx, dz = dx / norm, dz / norm
+        ex = x[rows] + dx * entry_len[ramp]
+        ez = z[rows] + dz * entry_len[ramp]
+
+        # Nearest Balterium rectangle per entry point (running min over the patches).
+        best_d2 = np.full(len(rows), np.inf)
+        best_k = np.full(len(rows), -1, dtype=np.int32)
+        best_px = np.zeros(len(rows))
+        best_pz = np.zeros(len(rows))
+        for k in range(len(rect)):
+            px = np.clip(ex, rect[k, 0], rect[k, 1])
+            pz = np.clip(ez, rect[k, 2], rect[k, 3])
+            d2 = (px - ex) ** 2 + (pz - ez) ** 2
+            upd = d2 < best_d2
+            best_d2[upd] = d2[upd]
+            best_k[upd] = k
+            best_px[upd] = px[upd]
+            best_pz[upd] = pz[upd]
+
+        d = np.sqrt(best_d2)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            align = (dx * (best_px - ex) + dz * (best_pz - ez)) / d
+        align[d < 5.0] = 1.0
+        align[~np.isfinite(align)] = -1.0
+        align = np.minimum(align, 1.0)
+        is_good = (best_k >= 0) & (d <= PLACE_D_GOOD) & (align >= PLACE_ALIGN_GOOD)
+        per_ramp[ramp] = (ok, rows, d, align, best_k, is_good)
+
+    def row_mask(ramp, which):
+        ok, rows, _, _, _, is_good = per_ramp[ramp]
+        if which == "ok":
+            return ok
+        g = np.zeros(n, dtype=bool)
+        g[rows[is_good]] = True
+        return g
+
+    # Rotation layers (same px/py mapping as generate_ramp_grid; row 0 = north).
+    gx = np.rint((x - min_x) / step).astype(np.int64)
+    gy = np.rint((max_z - z) / step).astype(np.int64)
+    inside = (gx >= 0) & (gx < grid_w) & (gy >= 0) & (gy < grid_h)
+    bits = (np.uint8(1)
+            | (row_mask("A", "ok").astype(np.uint8) << 1) | (row_mask("B", "ok").astype(np.uint8) << 2)
+            | (row_mask("A", "good").astype(np.uint8) << 3) | (row_mask("B", "good").astype(np.uint8) << 4))
+    bits = bits.astype(np.uint8)
+    out_dir = DATA_DIR / "refineries"
+    good_cells = []
+    for r in (0, 90, 180, 270):
+        grid = np.zeros((grid_h, grid_w), dtype=np.uint8)
+        sel = inside & (rot == r)
+        np.bitwise_or.at(grid, (gy[sel], gx[sel]), bits[sel])
+        Image.fromarray(grid, mode='L').save(str(out_dir / f"ref_layer_{faction}_{map_name}_r{r:03d}.png"))
+        good_cells.append(int(np.count_nonzero(grid & 0x18)))
+
+    # Per-patch placeability.
+    def placement(ramp, i):
+        _, rows, d, align, _, _ = per_ramp[ramp]
+        row = rows[i]
+        return {"x": round(float(x[row]), 1), "z": round(float(z[row]), 1), "rot": int(rot[row]),
+                "ramp": ramp, "d": round(float(d[i]), 1), "align": round(float(align[i]), 3)}
+
+    balt_k = {r['idx']: k for k, r in enumerate(balt)}
+    patches = []
+    placeable = set()
+    for res in resources:
+        k = balt_k.get(res['idx'])
+        entry = {"idx": res['idx'], "n_good": 0, "best": None, "best_any": None, "good": []}
+        if k is not None:
+            cand_good, cand_any = [], []
+            good_flat = []
+            for ramp_i, ramp in enumerate(("A", "B")):
+                _, rows, d, align, best_k, is_good = per_ramp[ramp]
+                mine = best_k == k
+                gi = np.nonzero(mine & is_good)[0]
+                entry["n_good"] += int(len(gi))
+                if len(gi):
+                    # spec 15.8: flat [x, z, c] per GOOD placement, c = rotIndex * 2 + ramp (A 0, B 1)
+                    gr = rows[gi]
+                    trip = np.stack([np.rint(x[gr]), np.rint(z[gr]), (rot[gr] // 90) * 2 + ramp_i], axis=1)
+                    good_flat.append(trip.astype(np.int64))
+                if len(gi):
+                    j = gi[np.argmin(d[gi])]
+                    cand_good.append((d[j], ramp, j))
+                ai = np.nonzero(mine & (align >= PLACE_ALIGN_GOOD))[0]
+                if len(ai):
+                    j = ai[np.argmin(d[ai])]
+                    cand_any.append((d[j], ramp, j))
+            if good_flat:
+                entry["good"] = np.concatenate(good_flat).ravel().tolist()
+            if cand_good:
+                _, ramp, j = min(cand_good, key=lambda t: t[0])
+                entry["best"] = placement(ramp, j)
+                placeable.add(res['idx'])
+            if cand_any:
+                _, ramp, j = min(cand_any, key=lambda t: t[0])
+                entry["best_any"] = placement(ramp, j)
+        patches.append(entry)
+
+    # site_box: x / z extent of the site box at rot 0 incl. the ConstructionBounds offsets (spec 15.8)
+    header = {"map": map_name, "faction": faction, "d_good": PLACE_D_GOOD, "align_good": PLACE_ALIGN_GOOD,
+              "scan": {"min_x": min_x, "max_z": max_z, "step": step},
+              "site_box": {"w": int(round(bx1 - bx0)), "h": int(round(bz1 - bz0))}}
+    out_path = out_dir / f"ref_place_{faction}_{map_name}.json"
+    # Header keys indented, one compact line per patch (the "good" lists are long).
+    with open(out_path, 'w') as f:
+        f.write("{\n")
+        for key, val in header.items():
+            f.write(f' {json.dumps(key)}: {json.dumps(val)},\n')
+        f.write(' "patches": [\n')
+        f.write(",\n".join("  " + json.dumps(e, separators=(',', ':')) for e in patches))
+        f.write("\n ]\n}\n")
+
+    print(f"  [OK] Ref layers {faction} {map_name}: {n}/{n_scan} placements clear of resources, cells with a GOOD ramp per rot "
+          f"{'/'.join(str(c) for c in good_cells)}; Balterium placeable {len(placeable)}/{len(balt)} "
+          f"-> {out_path.name} + 4 PNG")
+    return placeable
+
+
 def discover_all_data_maps():
     """Find all maps that have processed resource JSON data on disk."""
     res_dir = DATA_DIR / "resources"
@@ -651,6 +907,19 @@ def process_map(map_name):
             # 6. Ramp accessibility grid (for footprint tool)
             print(f"\n[6] Ramp grid ({faction}):")
             generate_ramp_grid(map_name, faction)
+
+    # 7. Refinery placeability layers + per-patch placeability (spec 15.2)
+    print("\n[7] Refinery placeability layers:")
+    placeable = {f: generate_refinery_layers(map_name, f, resources) for f in ["Sol", "Cent"]}
+    if placeable["Sol"] is not None and placeable["Cent"] is not None:
+        if not resources:
+            with open(DATA_DIR / "resources" / f"{map_name}.json") as f:
+                resources = json.load(f).get("resources", [])
+        n_balt = sum(1 for r in resources if r.get('type') == 'Balterium')
+        sol, cent = placeable["Sol"], placeable["Cent"]
+        print(f"  [SUMMARY] {map_name}: Balterium {n_balt}, placeable Sol {len(sol)} / Cent {len(cent)} / "
+              f"both {len(sol & cent)} / neither {n_balt - len(sol | cent)}")
+    result["placeable"] = placeable
 
     return result
 

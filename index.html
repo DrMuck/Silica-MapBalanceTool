@@ -65,6 +65,20 @@
           <input type="checkbox" id="layer-territory" disabled>
           <label for="layer-territory">Territory (generator)</label>
         </div>
+        <div class="layer-toggle ref-layer-ctl" title="Where a refinery can stand at one rotation (spec 15.3): grey = valid, no usable harvester ramp; blue = ramp reaches the ground but faces no patch; green = ramp faces a Balterium patch within 150 m. Red-outlined Balterium = not placeable for this faction.">
+          <label for="ref-layer-rot">Refinery layers</label>
+          <select id="ref-layer-faction">
+            <option value="Sol">Sol</option>
+            <option value="Cent">Cent</option>
+          </select>
+          <select id="ref-layer-rot">
+            <option value="off" selected>off</option>
+            <option value="0">0°</option>
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+          </select>
+        </div>
       </div>
 
       <!-- Measure Tool -->
@@ -235,6 +249,7 @@
           <span>Enemy distance</span>
           <span class="gen-inline"><input type="number" class="gen-num" id="gen-dist" value="2700" min="800" max="5000" step="50"> m</span>
         </div>
+        <div class="setting-row" title="Count only Balterium patches a refinery can be placed at with its harvester ramp facing the patch (HvA: Sol refinery; HvH / HvHvA: Sol and Centauri refinery, the mod swaps sides). Unplaceable patches are left out of the starting kits, the expansion curve and the resource shares, and are kept only as filler."><label class="gen-inline"><input type="checkbox" id="gen-placeable" checked> Count only placeable Balterium</label></div>
         <div class="setting-row" title="Several runs over a band of enemy distances with random seeds; the fairest distinct sets of all runs are shown. Mode, radii, patch totals, kits and weights stay as set.">
           <label class="gen-inline"><input type="checkbox" id="gen-random"> Random fair search</label>
         </div>
@@ -290,6 +305,7 @@
             <span>Results (topN)</span>
             <input type="number" class="gen-num" id="gen-adv-topn" value="5" min="1" max="20" step="1">
           </div>
+          <div class="setting-row" title="Count only placeable Balterium: a patch counts when the refinery of every required faction has at least this many usable placements (ramp facing the patch) next to it."><span>Min. usable placements</span><input type="number" class="gen-num" id="gen-adv-mingood" value="10" min="1" step="1"></div>
           <div class="setting-row" title="Exact number of Balterium patches within the refinery radius of every human start. Empty = auto (equal kits, at least 3).">
             <span>Start Balterium per human</span>
             <span class="gen-inline"><input type="number" class="gen-num" id="gen-adv-kit" value="" placeholder="auto" min="0" step="1"> <span class="gen-of" id="gen-adv-kit-max"></span></span>

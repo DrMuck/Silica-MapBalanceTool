@@ -820,3 +820,197 @@ context, candidates, patches, grid untouched). The selftest is `GenRandom.selfte
 `--random 8`, 13 maps x 3 modes: 39/39 rows, 0 infeasible, max 10.0 s (Badlands hvhva),
 determinism ok, reproduction 39/39, distinct / band / fair <= score 39/39, top set passes every
 gate 39/39. UI check in headless Chrome: run, rows, preview, Apply, Download name, plain Generate.
+
+## 15. Refinery placeability (round 6, 2026-11-02)
+
+### 15.1 Why
+A Balterium patch only pays off if a refinery can stand next to it with a harvester ramp that
+reaches the ground and faces the patch. Vanilla placement snaps to a 15 m grid and rotates in
+90-degree steps (both client-side, see `Si_RefineryPlacement/docs/`). The Sol refinery
+(152 x 96 m pad, ramp foot budget ~9 m, +10 m site bounds) fits far fewer spots than the
+Centauri one (64 x 116 m, ~14 m budget): Badlands valid cells 71.5 % vs 88.4 %, usable harvester
+ramp 65 % vs 80 % of those. Equal patch COUNTS in each start kit (G3) therefore do not mean
+equal eco. This round records, per map, faction and rotation, where a refinery can stand and
+whether its ramp faces a patch, and lets the generator (optionally) count only placeable patches.
+
+### 15.2 Data (preprocess.py, from the existing refinery scans)
+Source: `refinery_scan_{Sol,Cent}_<Map>_*.txt` (latest per map; scanner = Si_MapBalance.cs
+`ScanSingleRefinery`: vanilla height formula, 15 m grid, yaw 0/90/180/270, CSV columns
+`x,z,rot,terrainY,adjustY,finalY,rampA_ok,rampA_dirX,rampA_dirZ,rampB_ok,rampB_dirX,rampB_dirZ`).
+Ramp entry world point = cell centre + dir * |entryLocal| with |entryLocal| from the header
+`Ramps` section (Sol entry (25.5, 13, +-57.5) -> 62.9 m; Cent (+-55.0, -0.1, -34.2) -> 64.8 m).
+Patches: `data/resources/<Map>.json` Balterium entries, axis-aligned rectangles of
+`world_w x world_h` around (x, z).
+
+Per (cell, rot, ramp) with ramp_ok: P = nearest point of the nearest Balterium rectangle to the
+entry E; d = |P - E|; align = dot(dir, (P - E)/d) (d < 5 m -> align 1).
+A placement is GOOD for that patch when d <= 150 m and align >= 0.7 (ramp within 45 degrees of the
+patch). Constants `PLACE_D_GOOD = 150`, `PLACE_ALIGN_GOOD = 0.7` at the top of preprocess.py.
+
+Outputs, per map and faction (Sol, Cent), all on the scan grid of `js/map_config.js`:
+1. Four rotation layers `data/refineries/ref_layer_{faction}_<Map>_r{000,090,180,270}.png`,
+   8-bit grayscale (never alpha-coded: canvas readback premultiplies alpha), pixel bits:
+   bit0 valid placement, bit1 rampA ok, bit2 rampB ok, bit3 rampA GOOD for some patch,
+   bit4 rampB GOOD for some patch. 0 = no valid placement at that rotation.
+2. Per-patch placeability `data/refineries/ref_place_{faction}_<Map>.json`:
+   `{ "map", "faction", "d_good": 150, "align_good": 0.7, "scan": {min_x, max_z, step},
+      "patches": [ { "idx", "n_good", "best": {x, z, rot, ramp: "A"|"B", d, align} | null,
+                     "best_any": {x, z, rot, ramp, d, align} | null } ] }`
+   `n_good` = number of (cell, rot, ramp) placements GOOD for this patch; `best` = the GOOD one
+   with the smallest d; `best_any` = smallest d among placements with align >= 0.7 regardless of
+   distance (diagnostics). Biotics patches are listed with n_good 0 and nulls.
+3. Summary line per map in the preprocess log: patches placeable Sol / Cent / both / neither.
+The old `ref_access_*.json` (600 m, align > 0.5) and `ramp_grid_*.png` stay as they are.
+
+### 15.3 Map tool viewer
+Sidebar control "Refinery layers": faction (Sol | Cent) and rotation (0 | 90 | 180 | 270 | off).
+Overlay colours per cell: valid without usable ramp = grey 35 %, ramp ok but not facing a patch =
+blue 45 %, ramp GOOD for a patch = green 60 %. Default off. Balterium patches that are not
+placeable for the selected faction get a red outline while a layer is shown.
+
+### 15.4 Generator (revised 2026-11-02 after the data round, see 15.6)
+The data shows no patch with zero placements, but Sol has far fewer usable spots than Centauri
+(median n_good 38-64 % of Cent's; 7 Sol patches on 4 maps have n_good < 10, worst CrystalChasm
+patch 43 with Sol 1 / Cent 156). So the rule has a count threshold and a balance term:
+
+Settings: `placeability: { enabled: true, minGood: 10 }` (UI checkbox "Count only placeable
+Balterium", advanced number "min. usable placements" default 10; harness `--no-placeability`,
+`--min-good N`). Required factions: hva -> Sol; hvh and hvhva -> both Sol and Cent (the mod
+swaps Sol/Cent in 50 % of rounds, `swap_spawns` is written true).
+A Balterium patch is ELIGIBLE when `n_good >= minGood` in every required faction's `ref_place`
+file. Ineligible patches: not counted in the human kits (G3, `minKit`, `kitExact`), not counted
+in the expansion curve V(k) (G5/T6), not counted in the human share terms (T2/T3), and ranked
+last when the patch plan cuts to the totals (they may still be kept as filler for far
+harvesting; `counts.balterium` is unchanged). The Nest/Biotics side is untouched.
+
+Soft term T7 "placement ease balance" (weight 0.5, only when enabled, 0 in hva): for each
+required faction F and human side S, ease_F(S) = mean over S's kit Balterium patches of
+min(n_good_F, 200) / 200 (200 ~ Sol's median; saturating so a huge Cent count does not
+dominate). T7 = mean over required F of |ease_F(A) - ease_F(B)|, in [0, 1], 0 = equal. Scaled
+and weighted like T2/T3 (`weights.T7 = 0.5`).
+
+`GenRaw.placeability = { Sol: ref_place JSON, Cent: ref_place JSON }` loaded by
+browser_adapter.js and the harness; a missing file -> feature off for that map with a warning in
+`result.stats.placeability = { enabled, minGood, required: [...], ineligible: number, missing: [...] }`.
+Layout `_meta.generator.placeability = { enabled, minGood, required, ineligible: [idx...],
+ease: { Sol: {A, B}, Cent: {A, B} } }`. With `enabled: false` every output must be byte-identical
+to round 5 (no RNG draw, no reorder, T7 absent from the score).
+
+### 15.5 Acceptance (harness)
+- `--no-placeability`: 39/39 rows reproduce the round-5 outputs (determinism + layout checks).
+- default: 39/39 rows pass all gates or give a named infeasible reason (kit_candidates when a
+  map has too few placeable patches for the requested kit); report per map: Balterium total,
+  eligible count, ineligible count, T7 of the top result and ease Sol/Cent per side; runtime
+  <= 1.5 s per run. `--min-good 50` as a stress run: still 39/39 rows with gates or a named reason.
+- selftest entry in `model_selftest.js`: a synthetic map where one kit patch is unplaceable for
+  Sol flips G3/V(1) when the toggle is on and leaves them when off.
+
+### 15.6 Outcome (data, 2026-11-02)
+`preprocess.py` step [7] `generate_refinery_layers` wrote 26 `ref_place_*.json` and 104
+`ref_layer_*.png` (13 maps x Sol/Cent; ~1.3 s per map for both factions). |entryLocal| from
+the scan headers: Sol A 63.1 m / B 62.8 m, Cent A 64.0 m / B 65.5 m. The viewer control sits
+under Layers ("Refinery layers", faction + rotation, default off).
+
+**Resource-overlap rule (vanilla).** `ConstructionPreview.GetObstructed` (1.0.15, lines 612-621)
+rejects a site whose non-Entry construction bounds intersect a non-empty ResourceArea of any type.
+The scans do not apply this, so `generate_refinery_layers` drops every (cell, rot) whose site box
+touches a Balterium or Biotics rectangle (`world_w x world_h`). Site box = extent of the header's
+AboveGroundPoints (Sol x -84.3..67.6, z -47.9..47.8; Cent x -31..33, z -60..56, i.e. off-centre
+as in the prefab) plus `REFINERY_SITE_OFFSET` (Sol 10 m on every side, Cent 0, the prefab's
+`ConstructionBoundsMin/MaxOffset` from `Si_RefineryPlacement/analysis/refinery_dump.json`),
+rotated by the yaw. The renderer-derived bounds the game builds at runtime are not in the dump;
+the platform points are the closest prefab numbers. Dropped cells are 0 in the layers and do
+not count for `n_good` / `best` / `best_any`. Badlands keeps 71 % (Sol) / 83 % (Cent) of the
+scan's valid placements.
+
+| Map | Balt | n_good min/p10/med Sol | Cent | best.d min/med Sol | Cent | n_good=0 S/C | <10 S/C | lowest patch: idx, n_good Sol/Cent (best.d S/C) |
+|---|---|---|---|---|---|---|---|---|
+| Badlands | 96 | 36/211/507 | 139/532/967 | 0/3 | 0/0 | 0/0 | 0/0 | 42: 36/139 (7/0) |
+| BlackIsle | 23 | 7/24/101 | 82/129/267 | 1/6 | 0/0 | 0/0 | 1/0 | 11: 7/127 (8/0) |
+| Citadel | 27 | 62/169/370 | 254/345/619 | 0/3 | 0/0 | 0/0 | 0/0 | 18: 62/254 (72/0) |
+| CrimsonPeak | 40 | 158/247/492 | 394/478/771 | 0/5 | 0/0 | 0/0 | 0/0 | 9: 158/443 (2/0) |
+| CrystalChasm | 42 | 1/45/196 | 9/202/433 | 0/7 | 0/0 | 0/0 | 3/1 | 43: 1/156 (12/0) |
+| GreatErg | 64 | 34/197/383 | 165/501/800 | 0/6 | 0/0 | 0/0 | 0/0 | 50: 34/165 (109/0) |
+| IndustrialQuarter | 30 | 356/444/703 | 1019/1063/1265 | 0/18 | 0/0 | 0/0 | 0/0 | 89: 356/1026 (0/0) |
+| MonumentValley | 72 | 27/165/361 | 274/481/696 | 0/4 | 0/0 | 0/0 | 0/0 | 23: 27/294 (1/0) |
+| NarakaCity | 88 | 20/193/587 | 244/483/975 | 0/3 | 0/0 | 0/0 | 0/0 | 83: 20/313 (77/0) |
+| NorthPolarCap | 31 | 72/239/566 | 345/562/958 | 0/4 | 0/0 | 0/0 | 0/0 | 10: 72/358 (1/0) |
+| RiftBasin | 56 | 3/63/223 | 94/227/509 | 0/6 | 0/0 | 0/0 | 2/0 | 42: 3/94 (72/0) |
+| TheMaw | 43 | 5/151/409 | 123/370/638 | 0/4 | 0/0 | 0/0 | 1/0 | 29: 5/123 (65/0) |
+| WhisperingPlains | 40 | 32/180/395 | 277/471/714 | 0/5 | 0/0 | 0/0 | 0/0 | 21: 32/277 (5/0) |
+
+Even with the overlap rule every Balterium patch keeps at least one GOOD placement for both
+factions, so the 15.4 gate (`n_good >= 1`) still marks no patch ineligible. The faction gap is
+large in the counts: Sol's median `n_good` is 38-64 % of Cent's, and 7 Sol patches (BlackIsle 1,
+CrystalChasm 3, RiftBasin 2, TheMaw 1) have fewer than 10 good placements against 1 for Cent
+(CrystalChasm patch 43: Sol 1, Cent 156). Cent's `best.d` is 0 everywhere because its ramp entry
+lies ~22 m outside its pad; Sol's entry sits on the edge of its +10 m site box, so Sol never reaches
+inside a patch (`best.d` rounds to 0 at best, median 3-18 m). A gate that bites needs a count
+threshold (e.g. `n_good >= 10`) or the start-kit context (placements inside `R_b` of the HQ);
+design decision open.
+
+Since 15.8 every patch also carries `good` (flat `[x, z, c]` per GOOD placement, `n_good == good.length / 3`
+checked on all 3748 patches) and each file a `site_box` (Sol 172 x 116, Cent 64 x 116); the files are
+written one patch per line, 9.5 MB in total, the largest `ref_place_Cent_Badlands.json` 1.1 MB.
+
+### 15.7 Outcome (generator, 2026-11-02; includes 15.8)
+One rule in one place: `GenContext.build` builds `ctx.place` (`{enabled, required, minGood,
+mask, ineligible, nGood, goods, siteBox, Rb, neff}`); `GenContext.eligibleAt(ctx, k, pos)` is the
+eligibility rule (n_good >= minGood for every required faction, and for a patch within
+`radii.build` of a human start n_eff >= minGood with the HQ square of each faction there),
+`placeMask` / `setMask` / `placeNEff` / `placeNGood` derive from it. candidates.js (nBalt, ring1,
+bin score, exact-kit filter), patches.js (kits, fill rank, layer zones), expansion.js (V(k)) and
+metrics.js (kits, T2, T7 ease) read only these helpers; search.js adds `stats.placeability` and,
+with good lists, the per-start ineligible set to the plan cache key. T7 is a registry entry with
+`active()`: absent from terms and score when off. `settings.placeability` (and the UI's
+`weights.T7`) is **absent** when off, like `random`, so the settings hash stays the round-5 one.
+`minGood` is a setting (UI "Min. usable placements", harness `--min-good N`). A missing file
+turns the feature off for the map with a console warning and `stats.placeability.missing`.
+Layout `_meta.generator.placeability = {enabled, minGood, required, ineligible, ease}`, layout
+VERSION unchanged (1.2.0) so off layouts keep their bytes. T3 has no resource part and is
+unchanged; the stage-1 T2 proxy uses the n_good mask (no HQ footprint).
+
+Harness (13 maps x 3 modes, seed 1):
+- `--no-placeability`: SHA-256 of 39/39 results and 117/117 layouts (timestamp stripped)
+  identical to the round-5 run; determinism 39/39.
+- default (minGood 10): 39/39 rows pass G1-G5, gap check 39/39, 5 results, determinism 39/39,
+  max 1.32 s (<= 1.5 s on 39/39). Ineligible Balterium (hvh/hvhva, Sol and Cent): BlackIsle 1,
+  CrystalChasm 3, RiftBasin 2, TheMaw 1, all other maps 0 (21 over 39 rows). T7 of the top-1:
+  mean 0.18, max 1.05; ease per start Sol 0.57-1.00, Cent 0.95-1.00. HQ footprint: n_eff < n_good
+  on 216 of 1092 top-1 kit patch/faction pairs (mean drop 3.6 %, worst RiftBasin 69 -> 17 for
+  Sol), no kit patch lost eligibility through the HQ at minGood 10.
+- `--min-good 50`: 39/39 rows pass every gate, 0 infeasible, 69 ineligible over 39 rows (hvh:
+  BlackIsle 7, CrystalChasm 6, RiftBasin 4, six maps 1), 8 kit patches on 6 top-1 rows lost
+  eligibility through the HQ (BlackIsle, CrystalChasm, RiftBasin, TheMaw), max 1.24 s.
+- Selftests green: model_selftest 502/502 incl. the placeability fixture (G3 and V(1)/G5 flip on,
+  stay off; T7 = 2.5 for ease 0.5/1; minGood 60; hva needs Sol only; missing file; HQ square vs
+  site box incl. the rotIndex 1/3 swap; n_eff 5 of 100 makes a kit patch ineligible at its start).
+- Headless Chrome (CrystalChasm hvh): checkbox and min field present (on, 10), run, preview,
+  Apply, Download (`_meta.generator.placeability` with ease), off run without the key, no
+  console errors.
+
+### 15.8 HQ footprint (user request 2026-11-02)
+The start HQ stands inside the kit, so refinery placements whose site box would collide with
+the HQ do not exist in that layout. The count a kit patch gets must therefore depend on the HQ
+position.
+
+Data (preprocess.py, `ref_place_*.json`): each patch gains `"good": [x0, z0, c0, x1, z1, c1, ...]`,
+a flat integer list of every GOOD placement (cell centre in metres, c = rotIndex * 2 + ramp with
+rotIndex 0..3 for 0/90/180/270 and ramp 0 = A, 1 = B), and the file header gains
+`"site_box": { "w": <x extent at rot 0 incl. offsets>, "h": <z extent at rot 0> }` (Sol 172 x 116,
+Cent 64 x 116, from the platform points + ConstructionBounds offsets as in 15.6). `n_good` must
+equal `good.length / 3`.
+
+Generator: constants `HQ_FOOT = { Sol: 131, Cent: 95 }` (axis-aligned square side in metres:
+HQ platform max extent 111 / 75 from the hq scans plus 10 m margin per side; rotation of the
+in-game HQ is unknown to the tool, the square is the conservative stand-in). For a human
+candidate H of faction F and a Balterium patch within `radii.build` of H:
+`n_eff_F(patch, H)` = number of entries in `good` whose site rectangle (centre (x, z), extents
+site_box.w x site_box.h at rotIndex 0/2, swapped at 1/3) does NOT intersect the HQ square
+centred on H. Patches farther than `radii.build` keep `n_good`. Eligibility (`minGood`) and T7
+ease use `n_eff` for kit patches. In hvh/hvhva the HQ at a side is Sol in half the rounds and
+Cent in the other half: evaluate `n_eff_F` with the HQ square of F for that same faction's ease
+(ease_Sol uses HQ_FOOT.Sol, ease_Cent uses HQ_FOOT.Cent), and a kit patch is eligible only if
+`n_eff_F >= minGood` for every required F. Cache per (patch idx, candidate id, F). With the
+toggle off nothing of this runs. Harness report adds, per map, the top result's kit patches with
+their n_good -> n_eff for Sol and Cent, and how many kit patches lost eligibility through the HQ.

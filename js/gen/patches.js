@@ -1,10 +1,15 @@
 // Patch plan for a spawn set (spec section 4): equalise the starting kit, then cover the map.
 // UMD, DOM-free; reads ctx.ctrl (GenGrid.build) and an optional Fields object.
+// Placeability (spec 15.4, GenContext.placeMask): ineligible Balterium is not part of any human
+// kit (not counted, not frozen, never a paired add), not in a layer zone, and ranked after
+// every eligible patch in the coverage fill (kept only as filler; the totals are unchanged).
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.GenPatches = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./context.js'), root);
+  else root.GenPatches = factory(null, root);
+}(typeof self !== 'undefined' ? self : this, function (CtxMod, root) {
   'use strict';
+
+  const C = () => CtxMod || root.GenContext;
 
   const TYPES = ['Balterium', 'Biotics'];
 
@@ -57,6 +62,9 @@
   function plan(ctx, settings, set, fields, hooks) {
     const P = ctx.patches, nP = P.length, ctrl = ctx.ctrl;
     const R = radii(settings);
+    // spec 15.4 / 15.8: el[k] = 0 for Balterium ineligible for this set (null = every patch
+    // counts); the kits ask GenContext.eligibleAt per human (HQ footprint)
+    const el = C().setMask(ctx, set);
     const rank = hooks && typeof hooks.rank === 'function' ? hooks.rank : null;
     const counts = (settings && settings.counts) || {};
     const want = { Balterium: counts.balterium, Biotics: counts.biotics };
@@ -84,7 +92,7 @@
     const nBal = vanilla.Balterium;
     const inR = humans.map(hm => {
       const a = new Uint8Array(nP);
-      for (let k = 0; k < nP; k++) if (P[k].type === 'Balterium' && distTo(ctx, hm.c, k) <= R.build) a[k] = 1;
+      for (let k = 0; k < nP; k++) if (P[k].type === 'Balterium' && (!el || C().eligibleAt(ctx, k, hm.c)) && distTo(ctx, hm.c, k) <= R.build) a[k] = 1;
       return a;
     });
     let kH = 0;
@@ -270,11 +278,23 @@
       const cap = capOn && t === 'Balterium';
       while (m > 0 && pool.length && jm >= 0) {
         let bi = -1, bv = Infinity, ai = -1, av = Infinity;
-        for (let q = 0; q < pool.length; q++) {
-          const k = pool[q], v = PD[k][jm] + bias[k];
-          if (bi < 0 || v < bv || (v === bv && P[k].idx < P[pool[bi]].idx)) { bv = v; bi = q; }
-          if (cap && (ai < 0 || v < av || (v === av && P[k].idx < P[pool[ai]].idx))
-            && ((paired && tag[k]) || admissible(k))) { av = v; ai = q; }
+        if (el && t === 'Balterium') {
+          // spec 15.4: ineligible Balterium ranks after every eligible patch (lexicographic
+          // (ineligible, distance + bias, idx)); a separate loop so the off path is untouched
+          let bl = 1, al = 1;
+          for (let q = 0; q < pool.length; q++) {
+            const k = pool[q], v = PD[k][jm] + bias[k], l = el[k] ? 0 : 1;
+            if (bi < 0 || l < bl || (l === bl && (v < bv || (v === bv && P[k].idx < P[pool[bi]].idx)))) { bl = l; bv = v; bi = q; }
+            if (cap && (ai < 0 || l < al || (l === al && (v < av || (v === av && P[k].idx < P[pool[ai]].idx))))
+              && ((paired && tag[k]) || admissible(k))) { al = l; av = v; ai = q; }
+          }
+        } else {
+          for (let q = 0; q < pool.length; q++) {
+            const k = pool[q], v = PD[k][jm] + bias[k];
+            if (bi < 0 || v < bv || (v === bv && P[k].idx < P[pool[bi]].idx)) { bv = v; bi = q; }
+            if (cap && (ai < 0 || v < av || (v === av && P[k].idx < P[pool[ai]].idx))
+              && ((paired && tag[k]) || admissible(k))) { av = v; ai = q; }
+          }
         }
         if (cap) {
           if (ai < 0) capForced++;
@@ -332,7 +352,7 @@
       const t = r === 'Alien' ? 'Biotics' : 'Balterium', R0 = r === 'Alien' ? R.nest : R.build, R1 = R0 + R.chain;
       const r0 = { n: 0, amount: 0 }, r1 = { n: 0, amount: 0 };
       for (let k = 0; k < nP; k++) {
-        if (!keep[k] || P[k].type !== t) continue;
+        if (!keep[k] || P[k].type !== t || (el && !C().eligibleAt(ctx, k, c))) continue;
         const d = distTo(ctx, c, k);
         if (d <= R0) { r0.n++; r0.amount += amountOf(P[k]); }
         else if (d <= R1) { r1.n++; r1.amount += amountOf(P[k]); }
@@ -382,9 +402,9 @@
     for (const r of ['Sol', 'Cent']) if (set[r] && !humans.some(h => h.c === set[r])) humans.push({ role: r, c: set[r] });
     for (const r of ['Sol', 'Cent', 'Alien']) if (set[r] && !structs.includes(set[r])) structs.push(set[r]);
     const own = fields && fields.owner && fields.sides ? fields : null, PC = ctx.ctrl.patchCell;
-    const zone = new Int8Array(nP).fill(-1);
+    const zone = new Int8Array(nP).fill(-1), el = C().setMask(ctx, set);
     for (let k = 0; k < nP; k++) {
-      if (P[k].type !== 'Balterium') continue;
+      if (P[k].type !== 'Balterium' || (el && !el[k])) continue;   // spec 15.4: not in any layer
       for (let i = 0; i < humans.length; i++) {
         const d = distTo(ctx, humans[i].c, k);
         if (d <= R.build || d > layerR) continue;

@@ -10,11 +10,15 @@
 //   GenExpansion.curve(ctx, settings, spawn, sideIndex, fields, keptBalt, K[, others])
 //       -> {V: number[K], cells: number[K] (ci or -1), layer}
 //   GenExpansion.solo(ctx, settings, cand) -> number               V(1) ignoring enemies, vanilla
+// Placeability (spec 15.4, GenContext.placeMask): ineligible Balterium is neither grabbed nor
+// counted in the layer.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.GenExpansion = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./context.js'), root);
+  else root.GenExpansion = factory(null, root);
+}(typeof self !== 'undefined' ? self : this, function (CtxMod, root) {
   'use strict';
+
+  const C = () => CtxMod || root.GenContext;
 
   const DEFAULTS = { K: 3, reach: 0.85, w: [0.45, 0.35, 0.20] };
 
@@ -93,10 +97,10 @@
 
     if (elig.length < nP) { elig = new Uint8Array(nP); got = new Uint8Array(nP); }
     let layer = 0;
-    const layerR = reachM + Rb;
+    const layerR = reachM + Rb, place = C().placeMask(ctx);
     for (let k = 0; k < nP; k++) {
       elig[k] = 0; got[k] = 0;
-      if (P[k].type !== 'Balterium' || (keptBalt && !keptBalt[k])) continue;
+      if (P[k].type !== 'Balterium' || (keptBalt && !keptBalt[k]) || (place && !place[k])) continue;
       const d = dPatch(ctx, spawn, k);
       if (d <= Rb || d > layerR) continue;
       if (!ownAt(P[k].x, P[k].z, PC[k])) continue;

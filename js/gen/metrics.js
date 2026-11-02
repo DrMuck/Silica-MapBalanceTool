@@ -5,19 +5,71 @@
 // Sides: hvh = Sol, Cent; hva = Sol (the one human position, set.Sol === set.Cent) and Alien;
 // hvhva = Sol, Cent, Alien. Every pair of sides is an enemy pair. Distances in the gates and
 // in T1 are Euclidean (G2); the soft Voronoi of T2 reads the control fields.
+// Placeability (spec 15.4, GenContext.placeMask): ineligible Balterium is not counted in the
+// human kits / rings / nearest (G3), in T2 (and the stage-1 T2 proxy) or in V(k) (G5 / T6,
+// via GenExpansion); G4 still counts every kept patch. T3 is area only and does not change.
+// T7 placement ease balance (spec 15.4) exists only while the feature is active (registry
+// entry with active()); with the setting off it is absent from terms and score.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     let grid = null;
     try { grid = require('./grid.js'); } catch (e) { grid = null; }
-    module.exports = factory(grid, require('./expansion.js'), root);
+    module.exports = factory(grid, require('./expansion.js'), root, require('./context.js'));
   } else {
-    root.GenMetrics = factory(root.GenGrid, null, root);
+    root.GenMetrics = factory(root.GenGrid, null, root, null);
   }
-}(typeof self !== 'undefined' ? self : this, function (GenGrid, ExpMod, root) {
+}(typeof self !== 'undefined' ? self : this, function (GenGrid, ExpMod, root, CtxMod) {
   'use strict';
 
   // browser: looked up on the global at call time (script order does not matter)
   const Exp = () => ExpMod || (root && root.GenExpansion) || null;
+  const Ctx = () => CtxMod || (root && root.GenContext) || null;
+  /** GenContext.placeMask (spec 15.4): per patch k, 0 = ineligible Balterium; null = all count. */
+  function placeMask(ctx) { const C = Ctx(); return C && C.placeMask ? C.placeMask(ctx) : null; }
+  /** GenContext.placeNGood (spec 15.4): {F: n_good per patch k} of the required factions, or null. */
+  function placeNGood(ctx) { const C = Ctx(); return C && C.placeNGood ? C.placeNGood(ctx) : null; }
+  /** GenContext.eligibleAt / setMask / placeNEff (spec 15.8: eligibility with the HQ footprint). */
+  function eligibleAt(ctx, k, pos) { return Ctx().eligibleAt(ctx, k, pos); }
+  function setMask(ctx, set) { const C = Ctx(); return C && C.setMask ? C.setMask(ctx, set) : null; }
+
+  const EASE_CAP = 200;   // spec 15.4: n_good saturates at 200 (~ Sol's median)
+
+  /**
+   * Placement ease (spec 15.4 / 15.8), cached on m: {F: {A, B}} with A = Sol side, B = Cent side
+   * (hva: A only) = mean over the side's kit Balterium (kept, eligible, within R_b) of
+   * min(n_eff_F, 200) / 200 (n_eff = n_good minus the placements the HQ square of F at that
+   * side blocks; 0 for an empty kit); null when the feature is inactive.
+   */
+  function easeOf(ctx, m) {
+    if (m.ease !== undefined) return m.ease;
+    const ng = placeNGood(ctx);
+    if (!ng) { m.ease = null; return null; }
+    const Rb = m.R.build, out = {}, C = Ctx();
+    const humans = m.sides.filter(sd => sd.human);
+    for (const f of Object.keys(ng)) {
+      out[f] = {};
+      humans.forEach((sd, i) => {
+        let sum = 0, n = 0;
+        for (const k of m.kept.Balterium) {
+          if (sd.cand.pd[k] > Rb || !eligibleAt(ctx, k, sd.cand)) continue;
+          sum += Math.min(Math.max(C.placeNEff(ctx, k, sd.cand, f), 0), EASE_CAP) / EASE_CAP;
+          n++;
+        }
+        out[f][i === 0 ? 'A' : 'B'] = n ? sum / n : 0;
+      });
+    }
+    m.ease = out;
+    return out;
+  }
+
+  /** T7 = mean over the required factions of |ease_F(A) - ease_F(B)|, scaled / 0.10 like T2/T3; 0 in hva. */
+  function t7Of(ease) {
+    const fs = Object.keys(ease || {});
+    if (!fs.length) return 0;
+    let s = 0;
+    for (const f of fs) s += ease[f].B === undefined ? 0 : Math.abs(ease[f].A - ease[f].B);
+    return s / fs.length / 0.10;
+  }
 
   const PRESENTATION_BAR = 3.0;
   const HUMAN_FOOTPRINT = 67;          // circumscribed HQ footprint radius (m), G1
@@ -288,12 +340,13 @@
       }
     }
     // kit / ring / nearest per side (Euclidean, the game's build rule)
-    const kit = {}, rings = {}, near = {};
+    const kit = {}, rings = {}, near = {}, el = placeMask(ctx);
     for (const sd of sides) {
       const pd = sd.cand.pd, type = sd.type;
       const r0 = sd.human ? R.build : R.nest, r1 = r0 + R.chain, v = amountOf(settings, type);
       let n0 = 0, n1 = 0, dn = Infinity;
       for (const k of kept[type]) {
+        if (el && !eligibleAt(ctx, k, sd.cand)) continue;   // spec 15.4 / 15.8: in no human kit
         const d = pd[k];
         if (d <= r0) n0++;
         else if (d <= r1) n1++;
@@ -303,7 +356,7 @@
       rings[sd.key] = { r0: { n: n0, amount: n0 * v }, r1: { n: n1, amount: n1 * v } };
       near[sd.key] = dn;
     }
-    return { mode, sides, pairs, kept, kit, rings, near, R, info, fields, plan };
+    return { mode, set, sides, pairs, kept, kit, rings, near, R, info, fields, plan };
   }
 
   /**
@@ -445,6 +498,15 @@
         return t.value;
       },
     },
+    {
+      // spec 15.4: only while placeability is active (absent otherwise, so the round-5 score
+      // stays byte-identical); 0 in hva (one human)
+      id: 'T7', kind: 'soft', modes: ALL, weight: 0.5, label: 'T7 placement ease balance',
+      active(ctx) { return !!placeNGood(ctx); },
+      compute(ctx, settings, set, m) {
+        return m.mode === 'hva' ? 0 : t7Of(easeOf(ctx, m));
+      },
+    },
   ];
 
   function squeezeOf(m) {
@@ -467,8 +529,9 @@
    * side's own resource type}.
    */
   function territoryTotals(ctx, settings, m) {
-    const info = m.info, tau = 0.15 * dStar(settings);
-    const ks = m.kept.Balterium.concat(m.kept.Biotics);
+    const info = m.info, tau = 0.15 * dStar(settings), el = setMask(ctx, m.set);
+    // spec 15.4: ineligible Balterium counts for no side (only the humans harvest Balterium)
+    const ks = (el ? m.kept.Balterium.filter(k => el[k]) : m.kept.Balterium).concat(m.kept.Biotics);
     const v = new Float64Array(ks.length), typeOf = new Array(ks.length);
     for (let r = 0; r < ks.length; r++) {
       const p = ctx.patches[ks[r]];
@@ -511,6 +574,7 @@
     let score = 0;
     for (const e of registry) {
       if (e.modes.indexOf(m.mode) < 0) continue;
+      if (e.active && !e.active(ctx, settings)) continue;
       if (e.kind === 'hard') {
         if (!e.compute(ctx, settings, set, m)) gateFails.push(e.id);
       } else {
@@ -549,13 +613,24 @@
     }
     let expansionRatio = null;
     if (ex.keys.length > 1) expansionRatio = (m.expRatio || t6Of(ex.Vs, expansionParams(settings).w).ratio).map(v => round(v, 4));
-    return {
+    const out = {
       distances, squeeze: m.mode === 'hvhva' ? round(squeezeOf(m), 4) : null,
       shares, shares2, borders, kit: Object.assign({}, m.kit), rings: m.rings, nearest: near, exposure, elevation, T,
       gap: m.plan && m.plan.gap ? { Balterium: round(m.plan.gap.Balterium, 1), Biotics: round(m.plan.gap.Biotics, 1) } : null,
       kept: { Balterium: m.kept.Balterium.length, Biotics: m.kept.Biotics.length },
       expansion, expansionRatio,
     };
+    // spec 15.4: placement ease per required faction and human side (A = Sol, B = Cent); only
+    // when the feature is active (no key otherwise: round-5 bytes)
+    const ease = easeOf(ctx, m);
+    if (ease) {
+      out.placeEase = {};
+      for (const f of Object.keys(ease)) {
+        out.placeEase[f] = {};
+        for (const s of Object.keys(ease[f])) out.placeEase[f][s] = round(ease[f][s], 4);
+      }
+    }
+    return out;
   }
 
   // ── stage 1: cheap screen (Euclidean, vanilla amounts, no fields) ─────
@@ -624,7 +699,7 @@
   /** Euclidean soft-Voronoi T2 proxy on vanilla amounts (weighted penalty, own-type shares). */
   function cheapT2(ctx, settings, set) {
     const sides = sidesOf(set, settings.mode), tau = 0.15 * dStar(settings), info = ctxInfo(ctx);
-    const v0 = vanillaValues(ctx), es = sides.map(s => expOf(s.cand, tau)), ns = sides.length;
+    const v0 = vanillaValues(ctx), es = sides.map(s => expOf(s.cand, tau)), ns = sides.length, el = placeMask(ctx);
     const T = new Float64Array(ns), tot = {};
     for (const type of ['Balterium', 'Biotics']) {
       const ks = info.byType[type];
@@ -634,6 +709,7 @@
       tot[type] = 0;
       for (let r = 0; r < ks.length; r++) {
         const k = ks[r];
+        if (el && !el[k]) continue;   // spec 15.4: like T2
         let sum = 0;
         for (let s = 0; s < ns; s++) sum += es[s][k];
         if (!(sum > 0)) continue;
@@ -941,7 +1017,7 @@
   return {
     PRESENTATION_BAR, HUMAN_FOOTPRINT, HARVEST_RATE, DEFAULT_AMOUNTS,
     registry, evaluate, cheap, cheapGeom, cheapT2, lowerBound,
-    sidesOf, pairsOf, squeeze3, t1Of, t4Of, t6Of, g5Of, expansionParams, softTotals, softShares, balance,
+    sidesOf, pairsOf, squeeze3, t1Of, t4Of, t6Of, t7Of, g5Of, expansionParams, softTotals, softShares, balance, weightOf,
     humanCellOk, alienCellOk, placementOk, ctxInfo,
     selftest, metrics_selftest: selftest,
   };

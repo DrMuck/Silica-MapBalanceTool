@@ -159,6 +159,19 @@ const App = (() => {
         Layers.refAccessLayer.addTo(map);
       }
     }
+
+    // Refinery placeability layers (spec 15.3; use assetMap for variants)
+    await Layers.loadRefPlace(assetMap);
+    await refreshRefLayer();
+  }
+
+  function refreshRefLayer() {
+    if (!currentMap) return Promise.resolve();
+    const cfg = MAP_CONFIG[currentMap];
+    return Layers.showRefLayer(map,
+      document.getElementById('ref-layer-faction').value,
+      document.getElementById('ref-layer-rot').value,
+      cfg.base_map || currentMap, cfg);
   }
 
   function setupLayerToggles() {
@@ -185,6 +198,9 @@ const App = (() => {
           map.removeLayer(layer);
         }
       });
+    }
+    for (const id of ['ref-layer-faction', 'ref-layer-rot']) {
+      document.getElementById(id).addEventListener('change', () => refreshRefLayer());
     }
   }
 

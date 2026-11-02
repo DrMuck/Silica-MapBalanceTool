@@ -35,6 +35,12 @@ const Layers = (() => {
   // Label markers (for updating when amounts change)
   let labelMarkers = []; // {marker, res, group}
 
+  // Refinery placeability (spec 15.3): ref_place JSON per faction, the shown layer overlay,
+  // and the Balterium idx outlined red (n_good 0 for the shown faction; null = no outline)
+  let refPlaceData = { Sol: null, Cent: null };
+  let refLayerOverlay = null;
+  let unplaceablePatches = null;
+
   function createGridLayer(map, extent) {
     const group = L.layerGroup();
     const step = extent >= 2000 ? 500 : 250;
@@ -99,10 +105,12 @@ const Layers = (() => {
     } else {
       filter += `drop-shadow(0 0 2px ${color}) drop-shadow(0 0 4px ${color})`;
     }
+    const outline = isBalt && !isExcluded && unplaceablePatches && unplaceablePatches.has(res.idx)
+      ? 'outline:2px solid #ff3030;outline-offset:1px;border-radius:50%;' : '';
 
     return L.divIcon({
       className: '',
-      html: `<img src="${src}" style="width:${ICON_SIZE}px;height:${ICON_SIZE}px;filter:${filter};" />`,
+      html: `<img src="${src}" style="width:${ICON_SIZE}px;height:${ICON_SIZE}px;filter:${filter};${outline}" />`,
       iconSize: [ICON_SIZE, ICON_SIZE],
       iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2],
     });
@@ -557,8 +565,89 @@ const Layers = (() => {
     return pixel[0]; // Grayscale value = 8-bit ramp flags
   }
 
+  // --- Refinery placeability layers (spec 15.2 data, 15.3 viewer) ---
+
+  async function loadRefPlace(mapName) {
+    refPlaceData = { Sol: null, Cent: null };
+    for (const faction of ['Sol', 'Cent']) {
+      try {
+        const resp = await fetch(`data/refineries/ref_place_${faction}_${mapName}.json`);
+        if (resp.ok) refPlaceData[faction] = await resp.json();
+      } catch (e) {
+        refPlaceData[faction] = null;
+      }
+    }
+  }
+
+  // Bit-coded grayscale layer (bit0 valid, bit1/2 ramp A/B ok, bit3/4 ramp A/B GOOD) ->
+  // colourised RGBA data URL: GOOD green 60 %, ramp ok blue 45 %, valid grey 35 %, 0 transparent.
+  function colouriseRefLayer(img) {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imgData = ctx.getImageData(0, 0, img.width, img.height);
+    const px = imgData.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const v = px[i];
+      let c;
+      if (v & 0x18) c = [40, 220, 60, 153];
+      else if (v & 0x06) c = [60, 140, 255, 115];
+      else if (v & 0x01) c = [160, 160, 160, 89];
+      else c = [0, 0, 0, 0];
+      px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = c[3];
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+
+  // Show the layer for (faction, rot) or remove it (rot 'off'); returns a Promise.
+  let refLayerToken = 0;
+  function showRefLayer(map, faction, rot, mapName, cfg) {
+    const token = ++refLayerToken;
+    if (refLayerOverlay) { map.removeLayer(refLayerOverlay); refLayerOverlay = null; }
+    if (rot === 'off' || rot == null) {
+      setUnplaceable(null);
+      return Promise.resolve();
+    }
+    const place = refPlaceData[faction];
+    setUnplaceable(place
+      ? new Set(place.patches.filter(p => p.n_good === 0).map(p => p.idx))
+      : null);
+    const url = `data/refineries/ref_layer_${faction}_${mapName}_r${String(rot).padStart(3, '0')}.png`;
+    const minX = cfg.scan_min_x || -cfg.extent;
+    const maxX = cfg.scan_max_x || cfg.extent;
+    const minZ = cfg.scan_min_z || -cfg.extent;
+    const maxZ = cfg.scan_max_z || cfg.extent;
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        if (token === refLayerToken) {
+          refLayerOverlay = L.imageOverlay(colouriseRefLayer(img), [[minZ, minX], [maxZ, maxX]], {
+            interactive: false,
+            className: 'ref-layer-img',
+          }).addTo(map);
+        }
+        resolve();
+      };
+      img.onerror = () => { console.warn(`Refinery layer missing: ${url}`); resolve(); };
+      img.src = url;
+    });
+  }
+
+  // Outline set for Balterium markers; rebuilds only the Balterium icons.
+  function setUnplaceable(set) {
+    unplaceablePatches = set;
+    if (!balteriumLayer) return;
+    balteriumLayer.eachLayer(m => {
+      if (m._resData) updateResourceMarkerIcon(m, m._resColor || '#ffffff', excludedPatches.has(m._resData.idx));
+    });
+  }
+
   function getResourceData() { return resourceData; }
   function getRefAccessData(faction) { return refAccessData[faction]; }
+  function getRefPlaceData(faction) { return refPlaceData[faction]; }
 
   return {
     createGridLayer,
@@ -573,6 +662,9 @@ const Layers = (() => {
     getRampFlags,
     getResourceData,
     getRefAccessData,
+    loadRefPlace,
+    showRefLayer,
+    getRefPlaceData,
     setResourceAmounts,
     getExcludedPatches,
     setExcludedPatches,

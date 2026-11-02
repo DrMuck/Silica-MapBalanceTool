@@ -62,7 +62,9 @@
 
   /**
    * values: the UI's plain values {mode, seed, enemyDistance, radii, counts, exposureWeight,
-   * weights, exposureCut, controlModel, topN, kitExact, nestKitExact, random}; anything missing keeps the
+   * weights, exposureCut, controlModel, topN, kitExact, nestKitExact, random, placeability (bool),
+   * minGood};
+   * anything missing keeps the
    * spec default. kitExact / nestKitExact: null = auto, a number is passed on unchanged (the
    * engine reports a value that is not a whole number >= 0 as infeasible, spec 13.5).
    */
@@ -83,6 +85,11 @@
     if (typeof v.nestKitExact === 'number') s.nestKitExact = v.nestKitExact;
     // spec 14.1: random fair search; absent (not null) when off, so a normal run's hash is unchanged
     if (v.random) s.random = { runs: v.random.runs, band: v.random.band.slice() };
+    // spec 15.4: count only placeable Balterium (n_good >= minGood, default 10) and score T7;
+    // absent when off, and weights.T7 dropped, so the settings hash stays the round-5 one
+    if (v.placeability) {
+      s.placeability = { enabled: true, minGood: Number.isFinite(v.minGood) && v.minGood >= 1 ? v.minGood : 10 };
+    } else delete s.weights.T7;
     return s;
   }
 
@@ -106,6 +113,21 @@
     }
   }
 
+  const placeCache = new Map();
+
+  /** data/refineries/ref_place_<faction>_<assetMap>.json (spec 15.2), cached; null when absent. */
+  async function loadPlace(faction, assetMap) {
+    const url = `data/refineries/ref_place_${faction}_${assetMap}.json`;
+    if (placeCache.has(url)) return placeCache.get(url);
+    let json = null;
+    try {
+      const resp = await fetch(url);
+      if (resp.ok) json = await resp.json();
+    } catch (_) { json = null; }
+    if (json) placeCache.set(url, json);   // a miss is retried next run (files may appear later)
+    return json;
+  }
+
   /** GenRaw for the map currently loaded in the tool (resources come from Layers if they match). */
   async function buildRaw(mapName) {
     const cfg = mapConfig()[mapName];
@@ -119,18 +141,23 @@
       resources = await resp.json();
     }
 
-    const [hqSol, hqCent, refSol, refCent, terrain] = await Promise.all([
+    const [hqSol, hqCent, refSol, refCent, terrain, placeSol, placeCent] = await Promise.all([
       waitForMask('hq', 'Sol', assetMap),
       waitForMask('hq', 'Cent', assetMap),
       waitForMask('ref', 'Sol', assetMap),
       waitForMask('ref', 'Cent', assetMap),
       root.Terrain.load(mapName),
+      loadPlace('Sol', assetMap),
+      loadPlace('Cent', assetMap),
     ]);
 
     return {
       mapName, cfg, resources,
       masks: { hqSol, hqCent, refSol, refCent },
       heights: terrain.heights, heightsMeta: terrain.meta,
+      // spec 15.4: per-patch refinery placeability; a missing file is null (the engine then
+      // turns the feature off for this map and says so in result.stats.placeability)
+      placeability: { Sol: placeSol, Cent: placeCent },
     };
   }
 

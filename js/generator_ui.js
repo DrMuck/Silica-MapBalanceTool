@@ -172,6 +172,8 @@ const GeneratorUI = (() => {
       topN: Math.max(1, Math.round(num('gen-adv-topn', 5))),
       kitExact: exactKit('gen-adv-kit'),
       nestKitExact: exactKit('gen-adv-nestkit'),
+      placeability: $('gen-placeable') ? $('gen-placeable').checked : true,   // spec 15.4
+      minGood: Math.max(1, Math.round(num('gen-adv-mingood', 10))),
       random: $('gen-random').checked ? {
         runs: Math.max(2, Math.min(60, Math.round(num('gen-random-runs', 12)))),
         band: [num('gen-random-dlo', 1600), num('gen-random-dhi', 3800)],
@@ -380,6 +382,14 @@ const GeneratorUI = (() => {
     });
   }
 
+  /** Status suffix for spec 15.4: unplaceable Balterium left out, or the feature off for lack of data. */
+  function placeNote(st) {
+    const p = st && st.placeability;
+    if (!p) return '';
+    if (!p.enabled) return ` · placeability off: ref_place file missing (${(p.missing || []).join(', ')})`;
+    return ` · ${p.ineligible} Balterium with < ${p.minGood} usable placements not counted (${(p.required || []).join('+')})`;
+  }
+
   function renderResults(wallMs) {
     const box = $('gen-results');
     box.innerHTML = '';
@@ -398,10 +408,10 @@ const GeneratorUI = (() => {
       const why = Array.from(new Set(inf.map(r => r.infeasible.reason))).join(', ');
       setStatus(`${cands.length} set(s) from ${(result.runs || []).length} runs` +
         (inf.length ? ` (${inf.length} infeasible: ${why})` : '') +
-        ` in ${(ms / 1000).toFixed(1)} s · pool ${st.pool ?? '?'}`);
+        ` in ${(ms / 1000).toFixed(1)} s · pool ${st.pool ?? '?'}` + placeNote(st));
     } else {
       setStatus(`${cands.length} set(s) in ${Math.round(ms)} ms · candidates ${c.human ?? '?'}h/${c.alien ?? '?'}a · ` +
-        `stage 1 ${st.stage1Sets ?? '?'} · stage 2 ${st.stage2Sets ?? '?'}`);
+        `stage 1 ${st.stage1Sets ?? '?'} · stage 2 ${st.stage2Sets ?? '?'}` + placeNote(st));
     }
     // spec 13.5 / 13.7: an infeasible request is a named result, not an error
     if (result && result.infeasible) {

@@ -3,7 +3,8 @@
 //
 //   GenModelSelftest.synthetic()      -> {ok, results}        flat/wall grids, timing, Voronoi,
 //                                                              expansion-curve fixture (spec 12.6),
-//                                                              exact-kit fixtures (spec 13.8)
+//                                                              exact-kit fixtures (spec 13.8),
+//                                                              placeability fixture (spec 15.5)
 //   GenModelSelftest.map(raw)         -> {ok, results, summary}  candidates + 3 plan sets, layer
 //                                                              cap, expansion prepare/curve timing
 //   GenModelSelftest.run(raws)        -> {ok, results}        synthetic() + map(raw) for each
@@ -98,6 +99,7 @@
 
     results.push(...expansionFixture());
     results.push(...exactKitFixtures());
+    results.push(...placeabilityFixture());
     return { ok: results.every(r => r.ok), results };
   }
 
@@ -223,6 +225,131 @@
       && out.stats.kitRange && out.stats.kitRange.humanMax < 8,
       err || { infeasible: out && out.infeasible, kitRange: out && out.stats.kitRange });
     return results;
+  }
+
+  /**
+   * Spec 15.5 fixture on a flat 6 km map (R_b 1000): Sol (-1800, 0) and Cent (1800, 0) have 4
+   * Balterium each within R_b (mirrored) and a cluster of 3 in their expansion layer around
+   * (-+1500, 1800); one more patch (0, -2600) lies outside both layers. Synthetic ref_place
+   * files: the Sol refinery fits neither Sol kit patch #0 nor two of the Sol cluster patches;
+   * the Cent refinery fits everything but the far patch. One fixed plan keeps all 15 patches.
+   * Toggle off: kit 4/4, V(1) 3/3, G3 and G5 pass. Toggle on (hvh needs Sol AND Cent): 4
+   * ineligible (n_good < minGood 10: 3 Sol-side + the far one), kit 3/4 -> G3 fails, V(1) 1/3 -> G5
+   * fails, T2 > 0, T7 = 2.5 (ease Sol 0.5 / 1, Cent 1 / 1); T7 absent when off.
+   * hva needs Sol only: the far patch is eligible there. A missing Cent file turns it off.
+   */
+  function placeabilityFixture() {
+    const results = [];
+    const add = (name, ok, detail) => results.push({ name: `placeability fixture: ${name}`, ok: !!ok, detail });
+    const Met = GenMetricsMod();
+    if (!Met) { add('GenMetrics available', false, 'GenMetrics not loaded'); return results; }
+    const raw = flatRaw(3000, 15);
+    raw.mapName = 'SyntheticPlaceability';
+    const res = [];
+    const put = (x, z) => res.push({ idx: res.length, type: 'Balterium', x, z, y: 0, resources_max: 40000, world_w: 40, world_h: 40 });
+    // idx 0-7: kits (Sol even, Cent odd); 8-13: layer clusters (Sol even, Cent odd); 14: far patch
+    for (const [dx, dz] of [[300, 0], [0, 450], [-500, 100], [200, -650]]) { put(-1800 + dx, dz); put(1800 - dx, dz); }
+    for (const [dx, dz] of [[0, 0], [60, 0], [0, 60]]) { put(-1500 - dx, 1800 + dz); put(1500 + dx, 1800 + dz); }
+    put(0, -2600);
+    raw.resources = { resources: res };
+    // n_good: below minGood (10) = ineligible; Sol file 100 on the Sol kit, 200 on the Cent kit
+    // (ease Sol A 0.5 / B 1.0), Cent file 200 everywhere but the far patch (ease 1 / 1) -> T7 =
+    // mean(|0.5 - 1|, 0) / 0.10 = 2.5
+    const solN = idx => (idx === 0 ? 5 : idx === 8 || idx === 10 ? 0 : idx < 8 ? (idx % 2 ? 200 : 100) : 50);
+    const centN = idx => (idx === 14 ? 3 : 200);
+    const file = (f, nOf) => ({ map: raw.mapName, faction: f, d_good: 150, align_good: 0.7,
+      patches: res.map(p => ({ idx: p.idx, n_good: nOf(p.idx), best: null, best_any: null })) });
+    raw.placeability = { Sol: file('Sol', solN), Cent: file('Cent', centN) };
+    const counts = { balterium: 15, biotics: 0 };
+    const sOff = GenContext.defaultSettings(raw, { counts, placeability: { enabled: false } });
+    const sOn = GenContext.defaultSettings(raw, { counts });
+    add('defaults: placeability on; {enabled: false} drops the key (round-5 settings hash)',
+      sOn.placeability && sOn.placeability.enabled === true && !('placeability' in sOff), { on: sOn.placeability, offHasKey: 'placeability' in sOff });
+    const evalOf = settings => {
+      const ctx = GenContext.build(raw, settings);
+      const at = (x, z, id) => GenCandidates.at(ctx, settings, 'human',
+        Math.round((x - ctx.scan.minX) / ctx.scan.step), Math.round((ctx.scan.maxZ - z) / ctx.scan.step), id);
+      const set = { Sol: at(-1800, 0, 'S'), Cent: at(1800, 0, 'C') };
+      const F = GenGrid.fields(ctx, settings, set, new Map());
+      const plan = { kept: { Balterium: res.map(p => p.idx), Biotics: [] }, removed: [], frozen: new Set(), kit: {}, rings: {}, gap: null,
+        target: { Balterium: 15, Biotics: 0 } };
+      return { ctx, set, F, ev: Met.evaluate(ctx, settings, set, F, plan) };
+    };
+    const off = evalOf(sOff), on = evalOf(sOn);
+    const V1 = ev => ['Sol', 'Cent'].map(r => ev.metrics.expansion[r].V[0]);
+    add('off: no ctx.place, kit 4/4, V(1) 3/3, G3 and G5 pass',
+      off.ctx.place === undefined && GenContext.placeMask(off.ctx) === null && off.ev.metrics.kit.Sol === 4 && off.ev.metrics.kit.Cent === 4
+      && V1(off.ev).join() === '3,3' && !off.ev.gateFails.includes('G3') && !off.ev.gateFails.includes('G5'),
+      { kit: off.ev.metrics.kit, V1: V1(off.ev), gateFails: off.ev.gateFails });
+    add('on (hvh, Sol and Cent required): ineligible [0, 8, 10, 14], patches[k].placeable set',
+      on.ctx.place.enabled && on.ctx.place.required.join() === 'Sol,Cent' && on.ctx.place.ineligible.join() === '0,8,10,14'
+      && on.ctx.patches[0].placeable.Sol === false && on.ctx.patches[0].placeable.Cent === true && on.ctx.patches[14].placeable.Cent === false,
+      { enabled: on.ctx.place.enabled, required: on.ctx.place.required, ineligible: on.ctx.place.ineligible, p0: on.ctx.patches[0].placeable });
+    add('on: kit 3/4 -> G3 fails; V(1) 1/3 -> G5 fails; G4 still counts all 15 kept',
+      on.ev.metrics.kit.Sol === 3 && on.ev.metrics.kit.Cent === 4 && on.ev.gateFails.includes('G3')
+      && V1(on.ev).join() === '1,3' && on.ev.gateFails.includes('G5') && !on.ev.gateFails.includes('G4'),
+      { kit: on.ev.metrics.kit, V1: V1(on.ev), gateFails: on.ev.gateFails });
+    add('on: candidate nBalt 3 vs 4 (off 4 vs 4); T2 > 0 (off ~0, mirrored)',
+      on.set.Sol.nBalt === 3 && on.set.Cent.nBalt === 4 && off.set.Sol.nBalt === 4 && on.ev.terms.T2 > 1 && Math.abs(off.ev.terms.T2) < 0.01,
+      { nBaltOn: [on.set.Sol.nBalt, on.set.Cent.nBalt], T2: [off.ev.terms.T2, on.ev.terms.T2] });
+    const pe = on.ev.metrics.placeEase || {};
+    add('T7: off absent (terms and metrics); on ease Sol 0.5/1, Cent 1/1, T7 = 2.5, weight 0.5 in the score',
+      !('T7' in off.ev.terms) && !('placeEase' in off.ev.metrics) && pe.Sol && pe.Sol.A === 0.5 && pe.Sol.B === 1 && pe.Cent.A === 1 && pe.Cent.B === 1
+      && Math.abs(on.ev.terms.T7 - 2.5) < 1e-9 && Math.abs(on.ev.score - Object.keys(on.ev.terms).reduce((a, k) => a + Met.weightOf(sOn, k) * on.ev.terms[k], 0)) < 1e-9
+      && Met.weightOf(sOn, 'T7') === 0.5,
+      { offTerms: Object.keys(off.ev.terms), ease: pe, T7: on.ev.terms.T7 });
+    const sMin = GenContext.defaultSettings(raw, { counts, placeability: { minGood: 60 } });
+    const cMin = GenContext.build(raw, sMin);
+    add('minGood 60: every cluster patch (Sol file 50) also drops out -> ineligible [0, 8-14]',
+      sMin.placeability.enabled && cMin.place.minGood === 60 && cMin.place.ineligible.join() === '0,8,9,10,11,12,13,14', cMin.place.ineligible);
+    // spec 15.8 HQ footprint: Sol kit patch #2 (n_good 100) gets a good list with 95 placements at
+    // (-1800, 100) (inside the Sol HQ square at (-1800, 0) + site box) and 5 at (-1800, 450)
+    // -> n_eff_Sol 5 < 10: ineligible at the Sol start only. Site rectangle: rotIndex 1/3 swaps w/h.
+    const cf = GenContext.countFree([-1660, 0, 0, -1660, 0, 2, -1660, 0, 5], { w: 172, h: 116 }, -1800, 0, 65.5);
+    add('HQ square vs site box: dx 140 blocks rot 0 and 180 (86 + 65.5), not rot 90 (58 + 65.5)', cf === 1, cf);
+    const rawH = Object.assign({}, raw, { placeability: {
+      Sol: Object.assign({}, raw.placeability.Sol, { site_box: { w: 172, h: 116 }, patches: raw.placeability.Sol.patches.map(q => (q.idx !== 2 ? q
+        : Object.assign({}, q, { good: [].concat(...Array.from({ length: 100 }, (_, i) => (i < 95 ? [-1800, 100, 0] : [-1800, 450, 0]))) }))) }),
+      Cent: raw.placeability.Cent } });
+    const hq = (() => {
+      const ctx = GenContext.build(rawH, sOn);
+      const set = { Sol: GenCandidates.at(ctx, sOn, 'human', on.set.Sol.px, on.set.Sol.py, 'S'), Cent: GenCandidates.at(ctx, sOn, 'human', on.set.Cent.px, on.set.Cent.py, 'C') };
+      const F = GenGrid.fields(ctx, sOn, set, new Map());
+      const plan = { kept: { Balterium: res.map(p => p.idx), Biotics: [] }, removed: [], frozen: new Set(), kit: {}, rings: {}, gap: null, target: { Balterium: 15, Biotics: 0 } };
+      return { ctx, set, ev: Met.evaluate(ctx, sOn, set, F, plan) };
+    })();
+    const sm = GenContext.setMask(hq.ctx, hq.set);
+    add('HQ footprint: n_eff_Sol(#2, Sol start) 5, n_good 100; ineligible at the Sol start, not in placeMask; Sol kit 3 -> 2, nBalt 2',
+      GenContext.placeNEff(hq.ctx, 2, hq.set.Sol, 'Sol') === 5 && hq.ctx.place.nGood.Sol[2] === 100 && !GenContext.eligibleAt(hq.ctx, 2, hq.set.Sol)
+      && GenContext.placeMask(hq.ctx)[2] === 1 && sm[2] === 0 && hq.ev.metrics.kit.Sol === 2 && hq.set.Sol.nBalt === 2
+      && GenContext.placeNEff(hq.ctx, 2, hq.set.Cent, 'Sol') === 100,
+      { nEff: GenContext.placeNEff(hq.ctx, 2, hq.set.Sol, 'Sol'), kit: hq.ev.metrics.kit, nBalt: hq.set.Sol.nBalt, ease: hq.ev.metrics.placeEase });
+    // patch plan: the auto kit is equal on eligible patches, the ineligible kit patch is not
+    // frozen; with 8 kept the fill takes eligible patches first, so no ineligible one is kept
+    const c8 = { balterium: 8, biotics: 0 };
+    const p8 = GenPatches.plan(on.ctx, GenContext.defaultSettings(raw, { counts: c8 }), on.set, on.F);
+    const p8off = GenPatches.plan(off.ctx, GenContext.defaultSettings(raw, { counts: c8, placeability: { enabled: false } }), off.set, off.F);
+    const inelKept = p8.kept.Balterium.filter(i => on.ctx.place.ineligible.includes(i));
+    add('on, 8 kept: kit equal on eligible patches, kit patch #0 not frozen, no ineligible patch kept (ranked last)',
+      p8.kit.Sol === p8.kit.Cent && !p8.frozen.has(0) && p8.kept.Balterium.length === 8 && inelKept.length === 0,
+      { kit: p8.kit, kept: p8.kept.Balterium, ineligibleKept: inelKept, offKept: p8off.kept.Balterium });
+    const ha = GenContext.build(raw, GenContext.defaultSettings(raw, { mode: 'hva', counts }));
+    add('hva (Sol required only): ineligible [0, 8, 10], the far patch counts',
+      ha.place.required.join() === 'Sol' && ha.place.ineligible.join() === '0,8,10', ha.place.ineligible);
+    const rawM = Object.assign({}, raw, { placeability: { Sol: raw.placeability.Sol, Cent: null } });
+    const warn = console.warn;
+    let warned = 0, cm = null;
+    console.warn = () => { warned++; };
+    try { cm = GenContext.build(rawM, sOn); } finally { console.warn = warn; }
+    add('Cent file missing (hvh): feature off for the map, missing [Cent], one warning, mask null',
+      cm.place.enabled === false && cm.place.missing.join() === 'Cent' && warned === 1 && GenContext.placeMask(cm) === null,
+      { enabled: cm.place.enabled, missing: cm.place.missing, warned });
+    return results;
+  }
+
+  function GenMetricsMod() {
+    if (typeof module === 'object' && module.exports) { try { return require('./metrics.js'); } catch (e) { return null; } }
+    return (typeof self !== 'undefined' ? self : this).GenMetrics || null;
   }
 
   // GenSearch is not a load-time dependency of this file (it pulls in metrics); looked up on use
