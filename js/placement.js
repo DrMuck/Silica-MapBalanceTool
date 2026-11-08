@@ -947,6 +947,10 @@ const Placement = (() => {
       hvhva: document.getElementById('mode-hvhva').checked,
       '4way': document.getElementById('mode-4way').checked,
     };
+    // Si_MapBalance 3.4.0: 2v1 layout (Sol + Cent allied vs Aliens), used only in
+    // Si_VersusVote 2v1 rounds and never in a normal HvHvA round. Written only when
+    // ticked, so normal layouts stay byte-identical.
+    if (document.getElementById('mode-2v1').checked) layout.game_modes['2v1'] = true;
     // Si_MapBalance 3.3.2: false = the mod never swaps Sol and Cent for this layout
     layout.swap_spawns = document.getElementById('swap-spawns').checked;
 

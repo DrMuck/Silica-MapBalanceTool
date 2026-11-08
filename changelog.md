@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-08 — 2v1 layout flag
+
+### Added
+- **2v1 (allied humans vs Aliens)** checkbox under Game Modes, saved as `"2v1": true` inside `game_modes` (written only when ticked; normal layouts are unchanged). For Si_VersusVote rounds on maps such as IndustrialQuarter where a voted HvHvA is played as a 2v1: Sol and Centauri allied for the whole round against the Aliens, so the two human HQs go on one side as a bloc and the Nest opposite
+- Si_MapBalance 3.4.0+ picks a 2v1 layout only in a 2v1 round and never in a normal HvHvA round (even with `hvhva: true`); with no 2v1 layout on the map a 2v1 round falls back to the normal HvHvA layouts. Older mod builds ignore the key, so ticking 2v1 also unticks HvH / HvA / HvHvA / 4-Way (they can be ticked again) and older builds skip the layout
+- Amber **2v1** badge next to the Game Modes heading while the flag is set; export names the file `layout_<Map>_2v1.json` and asks before exporting a 2v1 layout without a Sol, Cent or Alien spawn; Load restores the checkbox (absent = off)
+
+### Not done (follow-up)
+- The Spawn Generator still builds only HvH / HvA / HvHvA. A 2v1 mode (human HQs as a bloc, Nest opposite, fairness scored bloc vs Aliens) needs its own separation gate and score terms in `js/gen/` (see docs/SPAWN_GENERATOR.md §16); 2v1 layouts are placed by hand for now
+
 ## 2026-11-02 — Spawn Generator: count only placeable Balterium
 
 ### Added

@@ -177,14 +177,32 @@ const UI = (() => {
     });
 
     // Export
+    // 2v1 layout flag (game_modes "2v1"): badge + untick the other modes
+    const mode2v1 = document.getElementById('mode-2v1');
+    mode2v1.addEventListener('change', () => {
+      if (mode2v1.checked) {
+        for (const id of ['mode-hvh', 'mode-hva', 'mode-hvhva', 'mode-4way'])
+          document.getElementById(id).checked = false;
+      }
+      refresh2v1Badge();
+    });
+
     document.getElementById('btn-export').addEventListener('click', () => {
       const layout = Placement.exportLayout();
+      const is2v1 = !!(layout.game_modes && layout.game_modes['2v1']);
+      if (is2v1) {
+        const hqs = Placement.getHQs();
+        const missing = ['Sol', 'Cent', 'Alien'].filter(f => !hqs[f] || hqs[f].length === 0);
+        if (missing.length > 0 &&
+            !confirm(`2v1 layout without a ${missing.join(' / ')} spawn: the mod places the missing HQ/Nest the vanilla way. Export anyway?`))
+          return;
+      }
       const json = JSON.stringify(layout, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `layout_${layout.map}.json`;
+      a.download = is2v1 ? `layout_${layout.map}_2v1.json` : `layout_${layout.map}.json`;
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -491,6 +509,9 @@ const UI = (() => {
       document.getElementById('mode-hvhva').checked = data.game_modes.hvhva ?? true;
       document.getElementById('mode-4way').checked = data.game_modes['4way'] ?? false;
     }
+    // absent = normal layout (Si_MapBalance 3.4.0: game_modes "2v1")
+    document.getElementById('mode-2v1').checked = !!(data.game_modes && data.game_modes['2v1'] === true);
+    refresh2v1Badge();
     // absent = the mod's default (swap on)
     document.getElementById('swap-spawns').checked = data.swap_spawns !== false;
 
@@ -521,6 +542,11 @@ const UI = (() => {
         Placement.addFusionReactorAt(fr.x, fr.z, fr.capture_radius ?? 40);
       }
     }
+  }
+
+  function refresh2v1Badge() {
+    const on = document.getElementById('mode-2v1').checked;
+    document.getElementById('badge-2v1').hidden = !on;
   }
 
   return { init, updateBalance, importLayout };

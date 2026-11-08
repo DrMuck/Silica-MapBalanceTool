@@ -207,7 +207,7 @@
 
       <!-- Game Modes -->
       <div class="sidebar-section">
-        <h3>Game Modes</h3>
+        <h3>Game Modes <span id="badge-2v1" class="mode-badge" hidden title="2v1 layout: used only in Si_VersusVote 2v1 rounds (Sol + Centauri allied vs Aliens)">2v1</span></h3>
         <div class="layer-toggle">
           <input type="checkbox" id="mode-hvh" checked>
           <label for="mode-hvh">HvH</label>
@@ -223,6 +223,10 @@
         <div class="layer-toggle">
           <input type="checkbox" id="mode-4way">
           <label for="mode-4way">4-Way</label>
+        </div>
+        <div class="layer-toggle" title="2v1 layout for Si_VersusVote rounds where Sol and Centauri are allied against the Aliens (3 teams). Place the two human HQs as a bloc and the Nest opposite. Si_MapBalance 3.4.0+ picks it only in 2v1 rounds and never in a normal HvHvA round; ticking it unticks the other modes so older mod builds skip it too (layout JSON: game_modes &quot;2v1&quot;).">
+          <input type="checkbox" id="mode-2v1">
+          <label for="mode-2v1">2v1 (allied humans vs Aliens)</label>
         </div>
         <div class="layer-toggle" title="The mod swaps the Sol and Cent positions in 50 % of HvH / HvHvA rounds. Untick for layouts where each faction must keep its own position (layout JSON: swap_spawns).">
           <input type="checkbox" id="swap-spawns" checked>

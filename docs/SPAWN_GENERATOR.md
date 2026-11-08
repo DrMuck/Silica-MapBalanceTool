@@ -1056,3 +1056,13 @@ CrystalChasm 1.42, others <= 0.74), 1 kit patch lost through the HQ (RiftBasin h
 counts at the Cent start but not at the Sol start with swap off, for neither with swap on; T7 /
 ease per side). Headless Chrome: checkbox on by default; swap off -> download `swap_spawns: false`,
 `_meta.generator.swap: false`, Apply unticks the tool's swap checkbox; no console errors.
+
+## 16. Follow-up: 2v1 mode (not built, 2026-11-08)
+
+The layout JSON has a 2v1 flag since 2026-11-08 (`game_modes["2v1"]`, Si_MapBalance 3.4.0: used only in Si_VersusVote 2v1 rounds, where Sol and Centauri are allied for the whole round against the Aliens). The tool has the checkbox and badge; the generator does not produce 2v1 layouts. A 2v1 generator mode would change the model rather than add a setting:
+
+- Separation (G2/T1): the human-human distance becomes a "bloc" target (close, but outside each other's refinery radius), the 3-way squeeze ρ is dropped, and only the bloc-to-Nest distance keeps the d* target.
+- Fairness: compare the bloc (the two human kits and V(k) summed, or per-human floors) against the Nest kit and the Aliens' own-side share, instead of Sol vs Cent. The two humans still need equal kits (G3) so neither ally is the weak one.
+- Swap stays harmless (allies), placeability as in §15 for both human sides.
+
+Until then 2v1 layouts are placed by hand: tick "2v1 (allied humans vs Aliens)" under Game Modes.
