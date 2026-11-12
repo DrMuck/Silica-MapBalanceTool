@@ -14,6 +14,9 @@
 // enemies ignored, vanilla Balterium), the stage-1 expansion proxy.
 // Placeability (spec 15.4, GenContext.placeMask): ineligible Balterium is not counted in the
 // human counts (nBalt, ring1, the bin score, the exact-kit filter and maxKit).
+// Base sites (spec 17, settings.sites): valid() also needs a yaw valid for every structure that can
+// stand at the cell (GenContext.siteValid); the thinning skips spots with little open ground
+// (GenContext.siteOpenOk); at() sets cand.rot (GenContext.siteRot). Off: no change at all.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory(require('../terrain.js'), require('./grid.js'), root, require('./expansion.js'), require('./context.js'));
@@ -63,6 +66,8 @@
   function valid(ctx, settings, role, px, py) {
     const sc = ctx.scan, w = sc.w, hh = sc.h;
     if (px < 0 || py < 0 || px >= w || py >= hh) return false;
+    // spec 17: base sites on -> also a yaw valid for every structure that can stand here
+    if (!C().siteValid(ctx, role, px, py)) return false;
     if (role === 'alien') return !!ctx.nestMask[py * w + px];
     if (px < 1 || py < 1 || px >= w - 1 || py >= hh - 1) return false;
     const both = ctx.masks.hqBoth;
@@ -122,6 +127,8 @@
       nBalt, nBio, ring1, pd,
     };
     if (role !== 'alien') cand.v1solo = X().solo(ctx, settings, cand);
+    // spec 17: the layout "rot" of this start (only with base sites on, so the off path keeps its bytes)
+    if (C().sitesActive(ctx)) cand.rot = C().siteRot(ctx, role, px, py);
     return cand;
   }
 
@@ -210,7 +217,7 @@
 
     // 4. greedy thinning, cap (exact kit: spots below n are skipped before they can block others)
     const acc = [], sp2 = spacing * spacing;
-    let belowKit = 0;
+    let belowKit = 0, lowOpen = 0;
     for (const q of kept) {
       if (acc.length >= cap) break;
       if (need !== null && q.cnt < need) { belowKit++; continue; }
@@ -219,6 +226,9 @@
         const dx = a.x - q.x, dz = a.z - q.z;
         if (dx * dx + dz * dz < sp2) { ok = false; break; }
       }
+      // spec 17: little open ground around the start -> skipped (only checked for spots that
+      // would be accepted, the openness flood fill is too slow for every valid cell)
+      if (ok && !C().siteOpenOk(ctx, role, q.px, q.py)) { lowOpen++; ok = false; }
       if (ok) acc.push(q);
     }
 
@@ -227,6 +237,7 @@
     if (ctx.stats) {
       ctx.stats.candidates = ctx.stats.candidates || {};
       ctx.stats.candidates[role] = { validCells: nValid, bins: reps.length, cutE, afterCut: kept.length, count: out.length, maxKit, kitExact: need, belowKit };
+      if (C().sitesActive(ctx)) ctx.stats.candidates[role].lowOpen = lowOpen;   // spec 17 (absent when off)
     }
     return out;
   }

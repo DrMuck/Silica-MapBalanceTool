@@ -331,7 +331,10 @@
   }
 
   function placementOk(ctx, settings, cand) {
-    return cand.role === 'alien' ? alienCellOk(ctx, settings, cand.px, cand.py) : humanCellOk(ctx, settings, cand.px, cand.py);
+    const ok = cand.role === 'alien' ? alienCellOk(ctx, settings, cand.px, cand.py) : humanCellOk(ctx, settings, cand.px, cand.py);
+    // spec 17: base sites on -> a yaw valid for every structure that can stand there (true when off)
+    const C = Ctx();
+    return ok && (!C || !C.siteValid || C.siteValid(ctx, cand.role, cand.px, cand.py));
   }
 
   // ── shared evaluation context ─────────────────────────────────────────

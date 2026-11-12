@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-12 — Base sites: bases that fit, with a rotation
+
+Bases wedged into cliffs and buildings came from the old HQ zones: height map only, no Nest check, any of four rotations accepted, and no rotation in the layout. The tool now uses the base site data measured in the game (Si_MapBalance 3.6.0 site scan, `data/sites/`, docs/SITE_SCAN.md). Guide for layout makers: docs/BASE_SITES.md.
+
+### Added
+- **Spawn bases checked against the base site data** (Sol HQ, Cent HQ and now also the Nest) when placed or dragged, with "Restrict to HQ Zones" on: rocks, cliffs, buildings, steep ground and cut-off ledges are refused with the reason in plain words. Expansions keep the old HQ zones
+- **Rotation per spawn base**, saved as `"rot"` (0 / 90 / 180 / 270) on `spawns.<Sol|Cent|Alien>[0]` (Si_MapBalance 3.6.0+). An arrow and the base's real footprint show the rotation; click a spawn base to pick one (green = fits, red = does not, with the reason). Without `rot` the base shows **auto** and the rotation of the start point the server will use. Layouts without `rot` load and export unchanged
+- **Auto-snap spawn bases to a valid site** (Base Sites section, on by default): a base dropped where it does not fit is turned to a rotation that fits, else moved to the nearest spot within 120 m that fits; the status line says what happened. A rotation picked by hand is never overridden: the tool warns and offers the fix. With the Sol/Cent swap (HvH, HvHvA, 2v1) and for one HvA position used by both HQs, only rotations that fit both HQs count
+- **Check layout / Fix all**: every spawn base listed on load and on demand as fits / does not fit (reason) / little open ground (warning only), with a Fix per base and Fix all; a move that changes the patches inside the build radius is pointed out
+- **Base sites** layer under Layers: Sol HQ, Cent HQ, Sol + Cent or Nest at one rotation or "any", coloured by reason
+- Spawn Generator: **Only valid base sites** (default on): starts only where both HQs (Nest: the Nest) fit at one rotation, skips spots with little open ground, writes `rot`. Unticked, the generator output is byte for byte the old one; harness `--no-sites`
+- `tools/site_fix.js`: fixes a whole Spawns folder into a new folder (rotation first, then the nearest valid spot within 120 m), with a CSV / Markdown report that flags moves changing a resource kit for review
+- `js/sites.js`: the one implementation of the site rules for the tool, the generator and the Node tools; `tools/site_selftest.js` checks it against `tools/site_audit.py` row for row and checks the PNG decoding against pngjs
+
+### Changed
+- `tools/site_audit.py`: 2v1 layouts count as swappable (a 2v1 round is an HvHvA round in the mod) and an HvA position used by both Sol[0] and Cent[0] must fit both HQs (docs/SITE_SCAN.md section 8); before, both cases were checked for the entry's own HQ only
+
 ## 2026-11-08 — 2v1 layout flag
 
 ### Added

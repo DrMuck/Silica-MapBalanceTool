@@ -87,6 +87,8 @@
     if (v.random) s.random = { runs: v.random.runs, band: v.random.band.slice() };
     // spec 15.9: Sol/Cent swap; absent when on (the default), false when off
     if (v.swap === false) s.swap = false;
+    // spec 17: only valid base sites (with "rot") and enough open ground; absent when off
+    if (v.sites) s.sites = { enabled: true };
     // spec 15.4: count only placeable Balterium (n_good >= minGood, default 10) and score T7;
     // absent when off, and weights.T7 dropped, so the settings hash stays the round-5 one
     if (v.placeability) {
@@ -130,8 +132,11 @@
     return json;
   }
 
-  /** GenRaw for the map currently loaded in the tool (resources come from Layers if they match). */
-  async function buildRaw(mapName) {
+  /**
+   * GenRaw for the map currently loaded in the tool (resources come from Layers if they match).
+   * opts.sites: attach the base site data (js/sites.js, spec 17) as raw.sites.
+   */
+  async function buildRaw(mapName, opts) {
     const cfg = mapConfig()[mapName];
     if (!cfg) throw new Error(`unknown map ${mapName}`);
     const assetMap = cfg.base_map || mapName;
@@ -153,8 +158,13 @@
       loadPlace('Cent', assetMap),
     ]);
 
+    // spec 17: base site layers (cached by Sites.load; null on maps without data -> the engine
+    // turns the setting off for the map and says so in result.stats.sites)
+    const sites = opts && opts.sites && root.Sites ? await root.Sites.load(assetMap) : undefined;
+
     return {
       mapName, cfg, resources,
+      ...(sites !== undefined ? { sites } : {}),
       masks: { hqSol, hqCent, refSol, refCent },
       heights: terrain.heights, heightsMeta: terrain.meta,
       // spec 15.4: per-patch refinery placeability; a missing file is null (the engine then

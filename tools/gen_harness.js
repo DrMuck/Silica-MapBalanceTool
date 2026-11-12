@@ -6,6 +6,7 @@
 //                             [--no-placeability]   (any mode: refinery placeability off, spec 15.4)
 //                             [--min-good N]        (eligible = n_good >= N; default 10, spec 15.4)
 //                             [--no-swap]           (settings.swap = false: Sol start Sol only, Cent start Cent only, spec 15.9)
+//                             [--no-sites]          (settings.sites off: old HQ zones only, no "rot", spec 17)
 //   node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]
 //   node tools/gen_harness.js [--kit N] [--nest M] ...            exact start kits (spec 13) on every run
 //   node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps ..] [--modes ..]
@@ -58,9 +59,11 @@ let PLACE_ON = true;   // spec 15.4 default; --no-placeability sets false
 /** Settings override of the placeability toggle (GenContext.defaultSettings drops the key when off). */
 let PLACE_MIN = null;  // --min-good N: eligibility threshold (settings.placeability.minGood; engine default 10)
 let SWAP_ON = true;     // spec 15.9 default; --no-swap sets false
+let SITES_ON = true;    // spec 17 default (the tool's checkbox is on); --no-sites sets false
 function placeOver() {
   const o = { placeability: PLACE_MIN ? { enabled: PLACE_ON, minGood: PLACE_MIN } : { enabled: PLACE_ON } };
   if (!SWAP_ON) o.swap = false;
+  if (SITES_ON) o.sites = { enabled: true };   // absent when off: the round-7 settings and bytes
   return o;
 }
 /** The threshold the runs use: --min-good, else the engine default (GenContext.PLACE_MIN_GOOD, 10). */
@@ -82,6 +85,7 @@ function png() {
 }
 
 const Terrain = require(path.join(JS, 'terrain.js'));
+const Sites = require(path.join(JS, 'sites.js'));
 
 function loadMapConfig() {
   const src = fs.readFileSync(path.join(JS, 'map_config.js'), 'utf8');
@@ -136,6 +140,9 @@ function loadRaw(mapName, MAP_CONFIG) {
   const resources = JSON.parse(fs.readFileSync(path.join(DATA, 'resources', `${base}.json`), 'utf8'));
   const { heights, meta } = readHeights(base);
   const raw = { mapName, cfg, resources, masks, heights, heightsMeta: meta, placeability: loadPlaceability(mapName, base) };
+  // spec 17: base site layers (data/sites, js/sites.js); used only when settings.sites is on
+  const sites = Sites.loadSync(base, Sites.nodeIO(path.join(DATA, 'sites')));
+  if (sites) raw.sites = sites;
   rawCache.set(mapName, raw);
   return raw;
 }
@@ -343,6 +350,7 @@ function summarize(raw, mode, seed, run, E) {
     gapVanilla: vanillaGap(E, raw, ctx),
   };
   // spec 15.5: the engine's placeability stats (absent when off) next to the file counts
+  if (stats.sites) row.sites = stats.sites;   // spec 17 (absent when off)
   if (stats.placeability) {
     const q = stats.placeability;
     row.placeability = { enabled: q.enabled, required: q.required, ineligible: q.ineligible, missing: q.missing };
@@ -485,7 +493,28 @@ function checkLayout(L, mode, raw, settings, ev) {
   if (res.patch_overrides && Object.keys(res.patch_overrides).length) issues.push('patch_overrides not empty');
   if (!L._meta || !L._meta.generator) issues.push('_meta.generator missing');
   if (L.swap_spawns !== (settings.swap !== false)) issues.push(`swap_spawns ${L.swap_spawns} != setting`);   // spec 15.9
+  issues.push(...siteIssues(L, raw, settings));
   return issues;
+}
+
+/**
+ * Spec 17: with base sites on, every spawn base of the layout must carry "rot", be valid with it
+ * (Sites.auditLayout, docs/SITE_SCAN.md section 8 rules) and have enough open ground; with the
+ * setting off no layout may carry "rot".
+ */
+function siteIssues(L, raw, settings) {
+  const on = !!(settings.sites && settings.sites.enabled);
+  const sp = L.spawns || {};
+  const rots = ['Sol', 'Cent', 'Alien'].filter(f => Array.isArray(sp[f]) && sp[f][0] && sp[f][0].rot !== undefined);
+  if (!on) return rots.length ? [`rot written with base sites off (${rots.join(', ')})`] : [];
+  if (!raw.sites) return [];
+  const out = [];
+  for (const r of Sites.auditLayout(raw.sites, L)) {
+    if (r.rot === undefined) out.push(`site: ${r.entry} without rot`);
+    if (!r.validToday) out.push(`site: ${r.entry} (${r.x},${r.z}) not valid (${r.why})`);
+    if (r.lowOpen) out.push(`site: ${r.entry} (${r.x},${r.z}) little open ground (${r.open.reach})`);
+  }
+  return out;
 }
 
 // ── report ────────────────────────────────────────────────────────────────
@@ -675,6 +704,7 @@ function parseArgs(argv) {
     else if (k === '--no-placeability') a.placeability = false;
     else if (k === '--min-good') a.placeMin = ints(k, next())[0];
     else if (k === '--no-swap') a.swap = false;
+    else if (k === '--no-sites') a.sites = false;
     else if (k === '--layout') a.layouts.push(path.resolve(next()));
     else if (k === '--kit') a.kit = ints(k, next())[0];
     else if (k === '--nest') a.nest = ints(k, next())[0];
@@ -685,7 +715,7 @@ function parseArgs(argv) {
     else if (k === '--band') a.band = ints(k, next()).slice(0, 2);
     else if (k === '-h' || k === '--help') {
       console.log('node tools/gen_harness.js [--maps A,B] [--modes hvh,hva,hvhva] [--seed N] [--out dir] ' +
-        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M] [--no-placeability] [--min-good N] [--no-swap]\n' +
+        '[--no-determinism] [--no-seed-check] [--no-selftest] [--strict] [--kit N] [--nest M] [--no-placeability] [--min-good N] [--no-swap] [--no-sites]\n' +
         'node tools/gen_harness.js --layout <file.json> [--layout <file.json> ...]\n' +
         'node tools/gen_harness.js --sweep-kit 3,5,8,12 --sweep-nest 4,8,15 [--maps A,B] [--modes ..] [--sweep-det every-Nth-row]\n' +
         'node tools/gen_harness.js --random N [--band lo,hi] [--maps A,B] [--modes ..]');
@@ -1024,6 +1054,7 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.placeability === false) PLACE_ON = false;
   if (args.swap === false) SWAP_ON = false;
+  if (args.sites === false) SITES_ON = false;
   if (args.placeMin >= 1) PLACE_MIN = args.placeMin;
   if (args.layouts.length) return layoutMode(args);
   if (args.sweepKit || args.sweepNest) return sweepMode(args);
@@ -1181,6 +1212,22 @@ async function main() {
     const on = rows.filter(r => !r.error && (r.placeability || (r.terms && 'T7' in r.terms)));
     checks.push(`placeability off (--no-placeability): ${on.length ? `FAIL stats.placeability / T7 present on ${on.length} rows` : 'no run carries stats.placeability or T7'}`);
     if (on.length) fatal = true;
+  }
+  // spec 17: base sites; every top-3 layout re-checked with js/sites.js (checkLayout -> siteIssues)
+  {
+    const lay = rows.filter(r => !r.error).flatMap(r => (r.layouts || []).map(l => ({ r, l })));
+    const bad = lay.filter(x => x.l.issues.some(i => i.startsWith('site:') || i.startsWith('rot written')));
+    if (SITES_ON) {
+      const act = rows.filter(r => !r.error && r.sites && r.sites.enabled);
+      const lo = act.reduce((a, r) => a + (r.sites.lowOpen.human || 0) + (r.sites.lowOpen.alien || 0), 0);
+      checks.push(`base sites on (spec 17): ${act.length}/${rows.filter(r => !r.error).length} runs active; top-3 layouts with every spawn base valid with its rot and enough open ground: ` +
+        `${lay.length - bad.length}/${lay.length}; candidate spots skipped for little open ground ${lo}` +
+        (bad.length ? `; FAIL ${bad.slice(0, 6).map(x => `${x.r.map} ${x.r.mode} #${x.l.rank}: ${x.l.issues.filter(i => i.startsWith('site:')).join('; ')}`).join(' | ')}` : ''));
+    } else {
+      const st = rows.filter(r => !r.error && r.sites);
+      checks.push(`base sites off (--no-sites): ${st.length || bad.length ? `FAIL stats.sites on ${st.length} rows, rot in ${bad.length} layouts` : 'no run carries stats.sites, no layout carries rot'}`);
+    }
+    if (bad.length) fatal = true;
   }
   checks.push(`rows: ${rows.length} (${rows.filter(r => r.error).length} errors, ${rows.filter(r => !r.error && r.nResults === 0 && !r.infeasible).length} without candidates` +
     `, ${rows.filter(r => r.infeasible).length} infeasible)`);

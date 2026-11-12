@@ -1,0 +1,297 @@
+{
+ "map": "BlackIsle",
+ "version": 2,
+ "source": "site_scan_BlackIsle_20261112_190322.txt",
+ "scan_format": 1,
+ "nest_ground_rule": "info",
+ "nest_codes_normalized": 22758,
+ "start_points": [
+  {
+   "team": "Sol",
+   "idx": 0,
+   "name": "StrategyStart_Human_03",
+   "x": -899.0,
+   "z": 735.2,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 1,
+   "name": "StrategyStart_Human_02",
+   "x": -765.1,
+   "z": -35.8,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 2,
+   "name": "StrategyStart_Human_05",
+   "x": 905.0,
+   "z": 221.7,
+   "yaw": 270.0
+  },
+  {
+   "team": "Sol",
+   "idx": 3,
+   "name": "StrategyStart_Human",
+   "x": -729.9,
+   "z": -744.9,
+   "yaw": 0.0
+  },
+  {
+   "team": "Sol",
+   "idx": 4,
+   "name": "StrategyStart_Human_01",
+   "x": 768.0,
+   "z": 738.8,
+   "yaw": 270.0
+  },
+  {
+   "team": "Cent",
+   "idx": 0,
+   "name": "StrategyStart_Human_03",
+   "x": -899.0,
+   "z": 735.2,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 1,
+   "name": "StrategyStart_Human_05",
+   "x": 905.0,
+   "z": 221.7,
+   "yaw": 270.0
+  },
+  {
+   "team": "Cent",
+   "idx": 2,
+   "name": "StrategyStart_Human_02",
+   "x": -765.1,
+   "z": -35.8,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 3,
+   "name": "StrategyStart_Human",
+   "x": -729.9,
+   "z": -744.9,
+   "yaw": 0.0
+  },
+  {
+   "team": "Cent",
+   "idx": 4,
+   "name": "StrategyStart_Human_01",
+   "x": 768.0,
+   "z": 738.8,
+   "yaw": 270.0
+  },
+  {
+   "team": "Alien",
+   "idx": 0,
+   "name": "StrategyStart_Alien",
+   "x": 105.2,
+   "z": -47.7,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 1,
+   "name": "StrategyStart_Alien_01",
+   "x": -567.8,
+   "z": 367.7,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 2,
+   "name": "StrategyStart_Alien_02",
+   "x": 103.9,
+   "z": 828.2,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 3,
+   "name": "StrategyStart_Alien_05",
+   "x": -522.8,
+   "z": -495.6,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 4,
+   "name": "StrategyStart_Alien_09",
+   "x": -382.7,
+   "z": 780.0,
+   "yaw": 45.0
+  },
+  {
+   "team": "Alien",
+   "idx": 5,
+   "name": "StrategyStart_Alien_03",
+   "x": -182.5,
+   "z": -768.9,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 6,
+   "name": "StrategyStart_Alien_04",
+   "x": -310.4,
+   "z": -649.4,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 7,
+   "name": "StrategyStart_Alien_06",
+   "x": -0.8,
+   "z": -229.8,
+   "yaw": 45.0
+  },
+  {
+   "team": "Alien",
+   "idx": 8,
+   "name": "StrategyStart_Alien_11",
+   "x": -214.5,
+   "z": 676.0,
+   "yaw": 46.4
+  },
+  {
+   "team": "Alien",
+   "idx": 9,
+   "name": "StrategyStart_Alien_13",
+   "x": 873.1,
+   "z": -355.1,
+   "yaw": 167.0
+  },
+  {
+   "team": "Alien",
+   "idx": 10,
+   "name": "StrategyStart_Alien_08",
+   "x": 633.3,
+   "z": 192.7,
+   "yaw": 45.0
+  },
+  {
+   "team": "Alien",
+   "idx": 11,
+   "name": "StrategyStart_Alien_14",
+   "x": 255.6,
+   "z": -445.7,
+   "yaw": 177.7
+  },
+  {
+   "team": "Alien",
+   "idx": 12,
+   "name": "StrategyStart_Alien_10",
+   "x": -214.5,
+   "z": 676.0,
+   "yaw": 46.4
+  },
+  {
+   "team": "Alien",
+   "idx": 13,
+   "name": "StrategyStart_Alien_12",
+   "x": 88.1,
+   "z": -744.6,
+   "yaw": 243.8
+  },
+  {
+   "team": "Alien",
+   "idx": 14,
+   "name": "StrategyStart_Alien_07",
+   "x": 710.9,
+   "z": -651.8,
+   "yaw": 45.0
+  }
+ ],
+ "grid": {
+  "scan_min_x": -990,
+  "scan_max_x": 990,
+  "scan_min_z": -990,
+  "scan_max_z": 990,
+  "step": 15,
+  "grid_w": 133,
+  "grid_h": 133
+ },
+ "site_code": {
+  "bit0": "valid",
+  "bits1_3": "reason",
+  "bit4": "terrain_rule",
+  "bit5": "game_rule",
+  "bit6": "no_static_overlap",
+  "bit7": "navmesh",
+  "reasons": [
+   "ok",
+   "offmap",
+   "ground_terrain",
+   "ground_static",
+   "on_static",
+   "overlap",
+   "navmesh",
+   "no_data"
+  ]
+ },
+ "open_code": {
+  "bit0": "vehicle_ok",
+  "bit1": "alien_ok",
+  "bit2": "ground",
+  "bit3": "on_static",
+  "bit4": "vehicle_overlap",
+  "bit5": "vehicle_nav_fail",
+  "bit6": "alien_nav_fail",
+  "bit7": "alien_overlap"
+ },
+ "surf": {
+  "hmin": 38.3,
+  "hmax": 214.3,
+  "decode": "v = R*256+G; v == 0: no data; y = hmin + (v-1)/65534*(hmax-hmin)"
+ },
+ "structures": [
+  "Sol: 'Headquarters' prefab Sol_Headquarters, rule ConstructionData_Sol_Headquarters (snap XZ 15 Y 1, rotateToSurface False max 30, above 35, below 22, entries 0), 647 collider boxes, union 107.2x142.1x142.2 c(0.1,-17.6,0.6), PhysicalBounds 107.2x142.1x142.2 c(0.1,-17.6,0.6), footprint x[-53.5,53.7] z[-70.5,71.7], clip y>-4.35, nav graph 'Small Vehicle' slack 0.0 main area 2765 (24232 walkable nodes, 324 components, top: area 2765=18749, area 3018=776, area 2787=393, area 3066=257)",
+  "Cent: 'Headquarters' prefab Cent_Headquarters, rule ConstructionData_Cent_Headquarters (snap XZ 15 Y 1, rotateToSurface False max 30, above 21, below 16, entries 0), 571 collider boxes, union 109.0x132.0x131.9 c(0.4,-17.9,2.4), PhysicalBounds 109.0x132.0x131.9 c(0.4,-17.9,2.4), footprint x[-54.1,54.9] z[-63.6,68.3], clip y>-3.00, nav graph 'Small Vehicle' slack 0.0 main area 2765 (24232 walkable nodes, 324 components, top: area 2765=18749, area 3018=776, area 2787=393, area 3066=257)",
+  "Alien: 'Nest' prefab Alien_Nest, rule ConstructionData_Alien_Nest (snap XZ 5 Y 1, rotateToSurface True max 30, above 15, below 15, entries 0), 324 collider boxes, union 52.2x18.9x47.4 c(-1.2,4.3,2.7), PhysicalBounds 52.2x22.9x47.4 c(-1.2,3.9,2.7), footprint x[-27.3,24.9] z[-21.0,26.4], clip y>1.01, nav graph 'Voxel Graph' slack 6.1 main area 1 (159717 walkable nodes, 25 components, top: area 1=159453, area 13=38, area 15=26, area 11=20)"
+ ],
+ "probes": {
+  "vehicle": "half(4.31,1.63,5.97) 'Platoon Hauler' 19 colliders 6.6x3.3x9.9 (+1 m per side); graph 'Small Vehicle' main 2765 slack 0.0",
+  "alien": "half(3.00,2.00,3.00) 'Shocker' 1 colliders 4.0x4.0x4.0 (+1 m per side); graph 'Voxel Graph' main 1 slack 6.1"
+ },
+ "scan": {
+  "Time": "2026-11-12 19:03:22",
+  "Map": "BlackIsle",
+  "Mod": "Si_MapBalance 3.6.0",
+  "Game": "Release:1.0.17",
+  "Terrain": "(-1000,38,-1000) size (2000,500,2000) tiles 1",
+  "FogOfWarBounds": "min(-1040,-1040) max(1040,1040)",
+  "Params": "ground_tol 8 overlap_depth 3 on_static_max 4 on_static_fails False clip_above_lowest_point 0.5 nav_margin 12 nav_min_probes 2 nav_max_h 6 nav_max_v 4",
+  "Cells": "17689",
+  "Open vehicle": "12078  Open alien: 17687",
+  "Scan time": "171 s"
+ },
+ "valid_counts": {
+  "Sol": {
+   "r000": 5905,
+   "r090": 5844,
+   "r180": 6077,
+   "r270": 6252
+  },
+  "Cent": {
+   "r000": 7991,
+   "r090": 8583,
+   "r180": 8537,
+   "r270": 8657
+  },
+  "Alien": {
+   "r000": 17563,
+   "r090": 17586,
+   "r180": 17567,
+   "r270": 17574
+  }
+ },
+ "open_counts": {
+  "vehicle_ok": 12078,
+  "alien_ok": 17687
+ }
+}

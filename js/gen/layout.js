@@ -17,7 +17,12 @@
   const ALIEN_CHAIN = { node: 150, biocache: 150 };
 
   function r1(v) { return Math.round(v * 10) / 10; }
-  function spawn(c) { return { x: r1(c.x), z: r1(c.z), isSpawn: true, isBiocache: false }; }
+  // spec 17: cand.rot (base sites on) -> the layout "rot"; absent otherwise, so the off path keeps its bytes
+  function spawn(c) {
+    const e = { x: r1(c.x), z: r1(c.z), isSpawn: true, isBiocache: false };
+    if (typeof c.rot === 'number') e.rot = c.rot;
+    return e;
+  }
 
   function canon(v) {
     if (v === null || typeof v !== 'object') return v;

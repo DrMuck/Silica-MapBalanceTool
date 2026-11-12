@@ -8,7 +8,7 @@
 /* global importScripts, GenContext, GenSearch, GenRandom */
 'use strict';
 
-importScripts('../terrain.js', 'rng.js', 'grid.js', 'expansion.js', 'context.js', 'candidates.js', 'patches.js',
+importScripts('../terrain.js', '../sites.js', 'rng.js', 'grid.js', 'expansion.js', 'context.js', 'candidates.js', 'patches.js',
   'metrics.js', 'search.js', 'random.js', 'layout.js');
 
 let cancelRequested = false;

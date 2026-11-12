@@ -38,6 +38,7 @@ const App = (() => {
 
     // Init modules
     Placement.init(map);
+    SiteUI.init(map);
     Measure.init(map);
     Expansion.init(map);
     UI.init();
@@ -163,6 +164,9 @@ const App = (() => {
     // Refinery placeability layers (spec 15.3; use assetMap for variants)
     await Layers.loadRefPlace(assetMap);
     await refreshRefLayer();
+
+    // Base site layers (docs/SITE_SCAN.md; use assetMap for variants)
+    await SiteUI.onMapChange(mapName, assetMap);
   }
 
   function refreshRefLayer() {

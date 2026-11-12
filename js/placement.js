@@ -203,7 +203,9 @@ const Placement = (() => {
 
     // Validate placement against HQ mask (skip for aliens — they place anywhere)
     const restrictToZones = document.getElementById('setting-restrict-hq').checked;
-    if (restrictToZones && faction !== 'Alien') {
+    const siteChecked = !isExpansion && hqs[faction].length === 0 && isSiteBase(faction) &&
+      typeof SiteUI !== 'undefined' && SiteUI.hasData();
+    if (restrictToZones && faction !== 'Alien' && !siteChecked) {
       if (!Layers.isValidPlacement('hq', faction, mapName, worldX, worldZ)) {
         showPlacementError(snapped, 'Invalid HQ zone');
         return;
@@ -224,6 +226,23 @@ const Placement = (() => {
 
     // Place HQ/nest/biocache
     const isSpawn = !isExpansion && hqs[faction].length === 0;
+    // Spawn bases (Sol/Cent HQ, Nest) are checked against the base site data (SiteUI); the old
+    // HQ-zone mask check above stays for expansions and maps without site data.
+    if (isSpawn && isSiteBase(faction) && typeof SiteUI !== 'undefined' && SiteUI.hasData()) {
+      const d = SiteUI.decide(faction, worldX, worldZ, undefined, false, restrictToZones);
+      if (!d.ok) {
+        showPlacementError(snapped, d.short || 'Invalid base site');
+        SiteUI.status(d.msg, 'error');
+        return;
+      }
+      addHQ(faction, L.latLng(d.z, d.x), true, map, false, { rot: d.rot });
+      if (d.msg) {
+        showPlacementError(L.latLng(d.z, d.x), d.short, d.level);
+        SiteUI.status(d.msg, d.level);
+      }
+      setPlacementMode(null);
+      return;
+    }
     addHQ(faction, snapped, isSpawn, map, isBiocache);
 
     // Exit placement mode after placing spawn HQ/nest
@@ -232,15 +251,22 @@ const Placement = (() => {
     }
   }
 
-  function showPlacementError(latlng, msg) {
+  // level: undefined / 'error' red, 'warn' yellow, 'info' green
+  function showPlacementError(latlng, msg, level) {
+    const color = level === 'info' ? '#44ff88' : level === 'warn' ? '#ffcc00' : '#ff4444';
     const icon = L.divIcon({
       className: '',
-      html: `<div style="color:#ff4444;font-size:11px;font-weight:bold;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;">${msg}</div>`,
+      html: `<div style="color:${color};font-size:11px;font-weight:bold;white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000;">${msg}</div>`,
       iconSize: [100, 16],
       iconAnchor: [50, 20],
     });
     const marker = L.marker(latlng, { icon, interactive: false }).addTo(placementGroup);
-    setTimeout(() => placementGroup.removeLayer(marker), 1500);
+    setTimeout(() => placementGroup.removeLayer(marker), level ? 3000 : 1500);
+  }
+
+  // Spawn bases with base site data: Sol HQ, Cent HQ, Alien Nest (not Wildlife)
+  function isSiteBase(faction) {
+    return faction === 'Sol' || faction === 'Cent' || faction === 'Alien';
   }
 
   function findParentHQ(faction, latlng, placingRadius) {
@@ -277,8 +303,9 @@ const Placement = (() => {
     return '#50c832';
   }
 
-  function addHQ(faction, latlng, isSpawn, map, isBiocache) {
+  function addHQ(faction, latlng, isSpawn, map, isBiocache, opts) {
     const fKey = faction === 'Sol' ? 'sol' : faction === 'Cent' ? 'cent' : faction === 'Wildlife' ? 'wildlife' : 'alien';
+    const siteBase = isSpawn && !isBiocache && isSiteBase(faction);
 
     let markerClass;
     let iconSize;
@@ -293,9 +320,11 @@ const Placement = (() => {
       iconSize = [14, 14];
     }
 
+    // Spawn bases carry an orientation cue (rotated by refreshSiteVisual)
     const icon = L.divIcon({
       className: markerClass,
       iconSize: iconSize,
+      html: siteBase ? '<div class="site-rot-arrow"></div>' : '',
     });
 
     const marker = L.marker(latlng, {
@@ -376,6 +405,14 @@ const Placement = (() => {
     }
 
     const hqEntry = { marker, buildCircle, effBuildCircle, chainCircle, effChainCircle, latlng, isSpawn, faction, isBiocache };
+    if (siteBase) {
+      // rot: layout "rot" (0/90/180/270) or undefined = the mod uses the nearest start point's yaw;
+      // rotManual: picked by hand (auto-snap never overrides it); siteFoot: rotated footprint
+      hqEntry.siteBase = true;
+      hqEntry.rot = opts && typeof opts.rot === 'number' && Number.isFinite(opts.rot) ? opts.rot : undefined;
+      hqEntry.rotManual = false;
+      hqEntry.siteFoot = null;
+    }
     hqs[faction].push(hqEntry);
 
     // Label
@@ -396,40 +433,124 @@ const Placement = (() => {
     });
 
     // Drag handler
+    let dragStart = null;
+    marker.on('dragstart', () => { dragStart = hqEntry.latlng; });
     marker.on('drag', (e) => {
-      const newLatLng = snapToGrid(e.latlng);
-      marker.setLatLng(newLatLng);
-      hqEntry.latlng = newLatLng;
-      if (isAlienType(faction)) {
-        const dims = getHalfDims(hqEntry);
-        const R = getStructureChainRange(hqEntry);
-        updateCirclePosition(hqEntry.buildCircle, newLatLng, effectiveRadius(R, dims));
-        if (hqEntry.chainCircle) {
-          updateCirclePosition(hqEntry.chainCircle, newLatLng, effectiveRadius(R, dims));
-        }
-      } else {
-        const dims = HALF_DIMS[faction];
-        const base = faction === 'Sol' ? solChainRange : centChainRange;
-        const fBR = faction === 'Sol' ? solBuildRadius : centBuildRadius;
-        updateCirclePosition(hqEntry.buildCircle, newLatLng, fBR);
-        updateCirclePosition(hqEntry.effBuildCircle, newLatLng, effectiveRadius(fBR, dims));
-        updateCirclePosition(hqEntry.chainCircle, newLatLng, base);
-        updateCirclePosition(hqEntry.effChainCircle, newLatLng, effectiveRadius(base, dims));
-      }
+      moveHQVisuals(hqEntry, snapToGrid(e.latlng));
+      if (hqEntry.siteBase) refreshSiteVisual(hqEntry);
       updateChainLines();
       Expansion.update();
     });
 
     marker.on('dragend', () => {
+      // Spawn base: base site check on the drop spot (auto-snap / reject / warn, SiteUI.decide)
+      if (hqEntry.siteBase && typeof SiteUI !== 'undefined' && SiteUI.hasData()) {
+        const p = hqEntry.latlng;
+        const restrict = document.getElementById('setting-restrict-hq').checked;
+        const d = SiteUI.decide(faction, p.lng, p.lat, hqEntry.rot, hqEntry.rotManual, restrict, hqEntry);
+        if (!d.ok) {
+          showPlacementError(p, d.short || 'Invalid base site');
+          SiteUI.status(d.msg + ' Moved back.', 'error');
+          if (dragStart) moveHQVisuals(hqEntry, dragStart);
+        } else {
+          if (d.x !== p.lng || d.z !== p.lat) moveHQVisuals(hqEntry, L.latLng(d.z, d.x));
+          if (d.rot !== hqEntry.rot) { hqEntry.rot = d.rot; hqEntry.rotManual = false; }
+          if (d.msg) {
+            showPlacementError(hqEntry.latlng, d.short, d.level);
+            SiteUI.status(d.msg, d.level);
+          }
+        }
+        refreshSiteVisual(hqEntry);
+        SiteUI.changed();
+      }
+      dragStart = null;
       updateChainLines();
       Expansion.update();
     });
+
+    // Spawn base: click opens the rotation / site popup
+    if (siteBase) {
+      marker.on('click', () => {
+        if (typeof SiteUI !== 'undefined') SiteUI.openPopup(hqEntry);
+      });
+    }
 
     // Right-click to remove
     marker.on('contextmenu', () => {
       removeHQ(faction, hqEntry);
     });
 
+    if (siteBase) refreshSiteVisual(hqEntry);
+    updateChainLines();
+    Expansion.update();
+    if (siteBase && typeof SiteUI !== 'undefined') SiteUI.changed();
+  }
+
+  // Move an HQ/nest marker and its circles (drag, auto-snap, site fix)
+  function moveHQVisuals(hqEntry, newLatLng) {
+    const faction = hqEntry.faction;
+    hqEntry.marker.setLatLng(newLatLng);
+    hqEntry.latlng = newLatLng;
+    if (isAlienType(faction)) {
+      const dims = getHalfDims(hqEntry);
+      const R = getStructureChainRange(hqEntry);
+      updateCirclePosition(hqEntry.buildCircle, newLatLng, effectiveRadius(R, dims));
+      if (hqEntry.chainCircle) {
+        updateCirclePosition(hqEntry.chainCircle, newLatLng, effectiveRadius(R, dims));
+      }
+    } else {
+      const dims = HALF_DIMS[faction];
+      const base = faction === 'Sol' ? solChainRange : centChainRange;
+      const fBR = faction === 'Sol' ? solBuildRadius : centBuildRadius;
+      updateCirclePosition(hqEntry.buildCircle, newLatLng, fBR);
+      updateCirclePosition(hqEntry.effBuildCircle, newLatLng, effectiveRadius(fBR, dims));
+      updateCirclePosition(hqEntry.chainCircle, newLatLng, base);
+      updateCirclePosition(hqEntry.effChainCircle, newLatLng, effectiveRadius(base, dims));
+    }
+  }
+
+  // Orientation cue, rotated site footprint, validity ring and label of a spawn base.
+  // Shown yaw: rot, else the start point yaw the mod will use (SiteUI.shownYaw).
+  function refreshSiteVisual(hqEntry) {
+    if (!hqEntry.siteBase) return;
+    const info = typeof SiteUI !== 'undefined' ? SiteUI.visualInfo(hqEntry) : null;
+    const el = hqEntry.marker.getElement && hqEntry.marker.getElement();
+    if (el) {
+      const arrow = el.querySelector('.site-rot-arrow');
+      if (arrow) {
+        arrow.style.display = info && info.yaw != null ? '' : 'none';
+        if (info && info.yaw != null) arrow.style.transform = `rotate(${info.yaw}deg)`;
+        arrow.classList.toggle('site-rot-auto', hqEntry.rot === undefined);
+      }
+      el.classList.toggle('site-bad', !!(info && info.bad));
+      el.classList.toggle('site-warn', !!(info && !info.bad && info.low));
+    }
+    if (hqEntry.siteFoot) { placementGroup.removeLayer(hqEntry.siteFoot); hqEntry.siteFoot = null; }
+    if (info && info.corners) {
+      const color = info.bad ? '#ff4444' : getFactionColor(hqEntry.faction);
+      hqEntry.siteFoot = L.polygon(info.corners, {
+        color, weight: 1.5, opacity: 0.9, fillColor: color, fillOpacity: 0.12,
+        dashArray: hqEntry.rot === undefined ? '4,4' : null, interactive: false,
+      }).addTo(placementGroup);
+    }
+  }
+
+  function refreshSiteVisuals() {
+    for (const f of ['Sol', 'Cent', 'Alien']) hqs[f].forEach(h => { if (h.siteBase) refreshSiteVisual(h); });
+  }
+
+  /** Spawn base of a faction (the isSpawn entry, also spawns.<faction>[0] on export) or null. */
+  function getSpawnBase(faction) {
+    const h = hqs[faction] && hqs[faction][0];
+    return h && h.siteBase ? h : null;
+  }
+
+  /** Set position and/or rotation of a spawn base (site fix, rotation popup). */
+  function setSpawnPose(hqEntry, x, z, rot, manual) {
+    if (x !== hqEntry.latlng.lng || z !== hqEntry.latlng.lat) moveHQVisuals(hqEntry, L.latLng(z, x));
+    hqEntry.rot = rot;
+    hqEntry.rotManual = !!manual && rot !== undefined;
+    refreshSiteVisual(hqEntry);
     updateChainLines();
     Expansion.update();
   }
@@ -440,9 +561,11 @@ const Placement = (() => {
     if (hqEntry.effBuildCircle) placementGroup.removeLayer(hqEntry.effBuildCircle);
     if (hqEntry.chainCircle) placementGroup.removeLayer(hqEntry.chainCircle);
     if (hqEntry.effChainCircle) placementGroup.removeLayer(hqEntry.effChainCircle);
+    if (hqEntry.siteFoot) placementGroup.removeLayer(hqEntry.siteFoot);
     hqs[faction] = hqs[faction].filter(h => h !== hqEntry);
     updateChainLines();
     Expansion.update();
+    if (hqEntry.siteBase && typeof SiteUI !== 'undefined') SiteUI.changed();
   }
 
   function updateChainLines() {
@@ -679,6 +802,7 @@ const Placement = (() => {
         if (hq.effBuildCircle) placementGroup.removeLayer(hq.effBuildCircle);
         if (hq.chainCircle) placementGroup.removeLayer(hq.chainCircle);
         if (hq.effChainCircle) placementGroup.removeLayer(hq.effChainCircle);
+        if (hq.siteFoot) placementGroup.removeLayer(hq.siteFoot);
       });
       hqs[faction] = [];
       chainLines[faction].forEach(l => placementGroup.removeLayer(l));
@@ -700,6 +824,7 @@ const Placement = (() => {
     fusionReactors = [];
     setPlacementMode(null);
     Expansion.update();
+    if (typeof SiteUI !== 'undefined') SiteUI.changed();
   }
 
   function setSolBuildRadius(r) {
@@ -776,9 +901,10 @@ const Placement = (() => {
 
   // Wildlife uses same radii as Alien — update Wildlife circles when Alien settings change
 
-  function addHQAt(faction, x, z, isSpawn, isBiocache) {
+  // opts.rot: layout "rot" of a spawn base (import)
+  function addHQAt(faction, x, z, isSpawn, isBiocache, opts) {
     const latlng = L.latLng(z, x); // lat=Z, lng=X
-    addHQ(faction, latlng, isSpawn, null, isBiocache || false);
+    addHQ(faction, latlng, isSpawn, null, isBiocache || false, opts);
   }
 
   function placeFootprintAt(type, x, z, rotation) {
@@ -903,12 +1029,18 @@ const Placement = (() => {
     // Spawns
     layout.spawns = {};
     for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
-      layout.spawns[faction] = hqs[faction].map(hq => ({
-        x: hq.latlng.lng,
-        z: hq.latlng.lat,
-        isSpawn: hq.isSpawn,
-        isBiocache: hq.isBiocache || false,
-      }));
+      layout.spawns[faction] = hqs[faction].map(hq => {
+        const e = {
+          x: hq.latlng.lng,
+          z: hq.latlng.lat,
+          isSpawn: hq.isSpawn,
+          isBiocache: hq.isBiocache || false,
+        };
+        // Si_MapBalance 3.6.0: yaw of the base; absent = the nearest start point's rotation,
+        // so layouts without a set rotation stay byte-identical
+        if (hq.siteBase && hq.rot !== undefined) e.rot = hq.rot;
+        return e;
+      });
     }
 
     // Footprints
@@ -1000,5 +1132,8 @@ const Placement = (() => {
     addFusionReactorAt,
     placeFootprintAt,
     toggleFootprintRotation,
+    getSpawnBase,
+    setSpawnPose,
+    refreshSiteVisuals,
   };
 })();

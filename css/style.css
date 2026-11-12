@@ -296,3 +296,38 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .gen-metrics { color: #8899aa; margin-top: 3px; line-height: 1.35; }
 .gen-row-actions { display: flex; gap: 4px; margin-top: 4px; }
 .gen-row-actions .btn { flex: 1; padding: 3px 6px; margin: 0; font-size: 11px; }
+
+/* Base sites (docs/SITE_SCAN.md) */
+.site-rot-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  margin-top: -22px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 12px solid #fff;
+  transform-origin: 5px 22px;
+  filter: drop-shadow(0 0 2px #000);
+  pointer-events: none;
+}
+.site-rot-arrow.site-rot-auto { border-bottom-color: rgba(255, 255, 255, 0.5); }
+.hq-marker.site-bad { box-shadow: 0 0 0 3px #ff4444, 0 0 10px #ff4444; }
+.hq-marker.site-warn { box-shadow: 0 0 0 3px #ffcc00; }
+.site-pop { font-size: 12px; line-height: 1.45; min-width: 230px; }
+.site-rot-btns { display: flex; gap: 3px; margin: 5px 0; }
+.site-rot-btns .btn { margin: 0; padding: 2px 4px; font-size: 11px; width: auto; flex: 1; }
+.site-rot-ok { background: rgba(0, 255, 136, 0.1); border-color: #00cc66; color: #88ffbb; }
+.site-rot-bad { background: rgba(255, 68, 68, 0.12); border-color: #ff4444; color: #ff8888; }
+.site-rot-cur { outline: 2px solid #fff; outline-offset: -2px; }
+.site-pop .btn-alien { margin-top: 5px; padding: 4px 8px; font-size: 12px; }
+.site-ok { color: #00ff88; }
+.site-badtext { color: #ff8888; }
+.site-warntext { color: #ffcc00; }
+.site-dim { color: #8899aa; }
+#site-list .gen-row { cursor: pointer; }
+#site-list .gen-row-sub { font-family: inherit; white-space: normal; }
+.gen-status.site-status-warn { color: #ffcc00; }
+.gen-status.site-status-info { color: #00ff88; }

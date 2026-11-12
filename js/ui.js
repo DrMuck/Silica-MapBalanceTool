@@ -186,6 +186,12 @@ const UI = (() => {
       }
       refresh2v1Badge();
     });
+    // Modes and swap decide which HQs a spawn spot must fit (base site check)
+    for (const id of ['mode-hvh', 'mode-hva', 'mode-hvhva', 'mode-4way', 'mode-2v1', 'swap-spawns']) {
+      document.getElementById(id).addEventListener('change', () => {
+        if (typeof SiteUI !== 'undefined') SiteUI.changed();
+      });
+    }
 
     document.getElementById('btn-export').addEventListener('click', () => {
       const layout = Placement.exportLayout();
@@ -477,7 +483,9 @@ const UI = (() => {
           const entries = data.spawns[faction];
           if (!entries || !Array.isArray(entries)) continue;
           for (const entry of entries) {
-            Placement.addHQAt(faction, entry.x, entry.z, entry.isSpawn || false, entry.isBiocache || false);
+            // rot (Si_MapBalance 3.6.0): kept as is; absent stays absent
+            Placement.addHQAt(faction, entry.x, entry.z, entry.isSpawn || false, entry.isBiocache || false,
+              { rot: typeof entry.rot === 'number' ? entry.rot : undefined });
           }
         }
       } else {
@@ -487,7 +495,8 @@ const UI = (() => {
           for (const faction of ['Sol', 'Cent', 'Alien', 'Wildlife']) {
             const pos = variant[faction];
             if (!pos || pos.x === undefined) continue;
-            Placement.addHQAt(faction, pos.x, pos.z, true, false);
+            Placement.addHQAt(faction, pos.x, pos.z, true, false,
+              { rot: typeof pos.rot === 'number' ? pos.rot : undefined });
           }
         }
       }
@@ -542,6 +551,9 @@ const UI = (() => {
         Placement.addFusionReactorAt(fr.x, fr.z, fr.capture_radius ?? 40);
       }
     }
+
+    // 11. Base site check of the spawn bases (modes and swap are set now)
+    if (typeof SiteUI !== 'undefined') SiteUI.afterImport();
   }
 
   function refresh2v1Badge() {

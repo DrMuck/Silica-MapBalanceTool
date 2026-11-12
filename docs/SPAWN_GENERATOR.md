@@ -1066,3 +1066,51 @@ The layout JSON has a 2v1 flag since 2026-11-08 (`game_modes["2v1"]`, Si_MapBala
 - Swap stays harmless (allies), placeability as in §15 for both human sides.
 
 Until then 2v1 layouts are placed by hand: tick "2v1 (allied humans vs Aliens)" under Game Modes.
+
+## 17. Base sites (round 8, 2026-11-12)
+
+### 17.1 Why
+The human G1 rule (hq_Sol AND hq_Cent with 8 neighbours) is the old terrain-only scan: it ignores rocks,
+cliffs, buildings and the navmesh, accepts a cell when any of four yaws fits, and the Nest has no site
+rule at all. Generated layouts carry no rotation, so the mod turns each base like the nearest vanilla
+start point. Most bad bases of the live layouts on 2026-11-12 were generated ones. The base site data
+(docs/SITE_SCAN.md, `data/sites/`) answers the question per 15 m cell and yaw.
+
+### 17.2 Setting and rule
+`settings.sites = {enabled: true}` (UI "Only valid base sites", default on; harness default on,
+`--no-sites` off). Absent when off, like `random` / `swap`, so the settings hash and every output keep
+the round-7 bytes. `GenRaw.sites` = the map's `Sites` SiteData (`js/sites.js`; browser: `Sites.load`,
+harness: `Sites.loadSync`), attached only when the setting is on in the browser.
+
+- `GenContext.build`: `ctx.sites = {enabled, sd, mask: {human, alien}, minOpen, open}`; `mask.human` = some
+  yaw valid for **both** HQs (swap on: either HQ stands there; hva: one position for both; swap off: the
+  stricter rule keeps a start valid either way), `mask.alien` = some yaw valid for the Nest. Missing data
+  or a grid mismatch: `{enabled: false, missing: true}`, a console warning, the map runs without it.
+- G1 (`GenCandidates.valid`, `GenMetrics.placementOk`): the old rule AND the site mask.
+- Open ground: a candidate spot (list thinning, only for spots that would be accepted) and a refinement
+  cell (`search.js` candAt) need `open_reach` >= 0.50 (HQ) / 0.25 (Nest) (SITE_SCAN.md section 7);
+  the flood fill costs ~0.04 ms, too much for every valid cell, so it is not part of `valid()`.
+- `GenCandidates.at` sets `cand.rot` = `Sites.bestYaws(...)[0]` (most valid 8-neighbours summed over the
+  structures, then closest to the start point yaw; SITE_SCAN.md section 8); `leanCand` keeps it;
+  `GenLayout.build` writes it as `rot` on every spawn entry (hva: the one shared entry).
+- `result.stats.sites = {enabled, lowOpen: {human, alien}}` (spots skipped for little open ground);
+  the UI status line shows it.
+
+### 17.3 Acceptance (harness)
+Off (`--no-sites`): result hashes and top-3 layouts identical to the round-7 engine (default run,
+`--no-swap`, `--no-placeability`, `--random`); no `stats.sites`, no `rot`. On: every check of the default
+run as before (gates, gap, determinism, 5 results, ms) plus every top-3 layout re-checked with
+`Sites.auditLayout`: each spawn base carries `rot`, is valid with it and is not low-open.
+
+### 17.4 Outcome (2026-11-12)
+Off: default run, `--no-swap`, `--no-placeability` 39/39 result hashes and 117/117 top-3 layouts
+identical to the round-7 engine (only `_meta.generator.generated` differs), `--random 4` on BlackIsle,
+Citadel, GreatErg 9/9 rows identical. On (seeds 1, 2, 3): 39/39 rows with 5 results, G1-G4 39/39, gap
+39/39, determinism 39/39, max 1.36 s, 117/117 top-3 layouts valid with `rot` and enough open ground per
+seed; 865-947 candidate spots skipped for little open ground per 39 runs; selftests unchanged. Human
+candidates drop most where rocks and buildings matter (BlackIsle 49 -> 29, IndustrialQuarter 139 -> 100,
+CrystalChasm 97 -> 69, MonumentValley 207 -> 167). Top-1 score, mean over the three seeds: hvh and hva
+unchanged within the seed noise (mean delta -0.01 .. +0.07); hvhva +0.22 on average (worse), most on
+TheMaw (+1.1), MonumentValley (+0.8), IndustrialQuarter, NorthPolarCap, Citadel (+0.5); better on
+NarakaCity (-0.4) and RiftBasin (-0.3). The browser path (worker, Apply) gives the same candidate
+counts and writes `rot` (headless Chrome).

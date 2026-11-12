@@ -427,7 +427,9 @@
   }
 
   function leanCand(c) {
-    return { id: c.id, role: c.role, x: c.x, z: c.z, px: c.px, py: c.py, ci: c.ci, E: c.E, z0: c.z0, nBalt: c.nBalt, nBio: c.nBio, ring1: c.ring1 };
+    const o = { id: c.id, role: c.role, x: c.x, z: c.z, px: c.px, py: c.py, ci: c.ci, E: c.E, z0: c.z0, nBalt: c.nBalt, nBio: c.nBio, ring1: c.ring1 };
+    if (c.rot !== undefined) o.rot = c.rot;   // spec 17 (base sites on only; the off path keeps its bytes)
+    return o;
   }
 
   function leanSet(set) {
@@ -490,6 +492,12 @@
     // spec 15.4: {enabled, required, ineligible, missing, ineligibleIdx}; absent when the setting is off
     const place = Ctx() && Ctx().placeStats ? Ctx().placeStats(ctx) : null;
     if (place) result.stats.placeability = place;
+    // spec 17: base sites; absent when the setting is off
+    if (ctx.sites) {
+      result.stats.sites = ctx.sites.enabled
+        ? { enabled: true, lowOpen: { human: cs.human ? cs.human.lowOpen : 0, alien: cs.alien ? cs.alien.lowOpen || 0 : 0 } }
+        : { enabled: false, missing: true };
+    }
     const infeasible = (reason, detail, text) => {
       result.candidates = [];
       result.infeasible = { reason, detail };
@@ -538,7 +546,8 @@
       const key = role + px + ',' + py;
       if (candMemo.has(key)) return candMemo.get(key);
       let c = null;
-      if (Cand().valid(ctx, s, role, px, py)) {
+      // spec 17: base sites on -> the refined start also needs open ground (always true when off)
+      if (Cand().valid(ctx, s, role, px, py) && Ctx().siteOpenOk(ctx, role, px, py)) {
         c = Cand().at(ctx, s, role, px, py);
         if (c.E > (role === 'alien' ? cutA : cutH)) c = null;   // G1 exposure cut
         // exact kits (spec 13.2): the same necessary condition as the candidate list

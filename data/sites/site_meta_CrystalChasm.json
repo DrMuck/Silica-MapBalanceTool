@@ -1,0 +1,529 @@
+{
+ "map": "CrystalChasm",
+ "version": 2,
+ "source": "site_scan_CrystalChasm_20261112_191633.txt",
+ "scan_format": 1,
+ "nest_ground_rule": "info",
+ "nest_codes_normalized": 47256,
+ "start_points": [
+  {
+   "team": "Sol",
+   "idx": 0,
+   "name": "StrategyStart_Human_09",
+   "x": 1187.0,
+   "z": -316.2,
+   "yaw": 180.0
+  },
+  {
+   "team": "Sol",
+   "idx": 1,
+   "name": "StrategyStart_Human_13",
+   "x": 867.4,
+   "z": 710.7,
+   "yaw": 270.0
+  },
+  {
+   "team": "Sol",
+   "idx": 2,
+   "name": "StrategyStart_Human_06",
+   "x": -526.5,
+   "z": 551.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 3,
+   "name": "StrategyStart_Human_10",
+   "x": -446.2,
+   "z": -653.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 4,
+   "name": "StrategyStart_Human",
+   "x": 1119.0,
+   "z": 1167.0,
+   "yaw": 180.0
+  },
+  {
+   "team": "Sol",
+   "idx": 5,
+   "name": "StrategyStart_Human_07",
+   "x": 476.1,
+   "z": 551.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 6,
+   "name": "StrategyStart_Human_11",
+   "x": -687.2,
+   "z": 36.5,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 7,
+   "name": "StrategyStart_Human_04",
+   "x": -1170.3,
+   "z": -1156.6,
+   "yaw": 0.0
+  },
+  {
+   "team": "Sol",
+   "idx": 8,
+   "name": "StrategyStart_Human_01",
+   "x": 1136.9,
+   "z": -1235.7,
+   "yaw": 0.0
+  },
+  {
+   "team": "Sol",
+   "idx": 9,
+   "name": "StrategyStart_Human_12",
+   "x": 1069.7,
+   "z": -677.0,
+   "yaw": 270.0
+  },
+  {
+   "team": "Sol",
+   "idx": 10,
+   "name": "StrategyStart_Human_08",
+   "x": 476.1,
+   "z": -447.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Sol",
+   "idx": 11,
+   "name": "StrategyStart_Human_02",
+   "x": 1230.4,
+   "z": 375.5,
+   "yaw": 270.0
+  },
+  {
+   "team": "Sol",
+   "idx": 12,
+   "name": "StrategyStart_Human_03",
+   "x": -1187.7,
+   "z": 1084.0,
+   "yaw": 180.0
+  },
+  {
+   "team": "Sol",
+   "idx": 13,
+   "name": "StrategyStart_Human_05",
+   "x": -595.0,
+   "z": -291.1,
+   "yaw": 0.0
+  },
+  {
+   "team": "Cent",
+   "idx": 0,
+   "name": "StrategyStart_Human_12",
+   "x": 1069.7,
+   "z": -677.0,
+   "yaw": 270.0
+  },
+  {
+   "team": "Cent",
+   "idx": 1,
+   "name": "StrategyStart_Human_03",
+   "x": -1187.7,
+   "z": 1084.0,
+   "yaw": 180.0
+  },
+  {
+   "team": "Cent",
+   "idx": 2,
+   "name": "StrategyStart_Human_04",
+   "x": -1170.3,
+   "z": -1156.6,
+   "yaw": 0.0
+  },
+  {
+   "team": "Cent",
+   "idx": 3,
+   "name": "StrategyStart_Human_05",
+   "x": -595.0,
+   "z": -291.1,
+   "yaw": 0.0
+  },
+  {
+   "team": "Cent",
+   "idx": 4,
+   "name": "StrategyStart_Human_13",
+   "x": 867.4,
+   "z": 710.7,
+   "yaw": 270.0
+  },
+  {
+   "team": "Cent",
+   "idx": 5,
+   "name": "StrategyStart_Human",
+   "x": 1119.0,
+   "z": 1167.0,
+   "yaw": 180.0
+  },
+  {
+   "team": "Cent",
+   "idx": 6,
+   "name": "StrategyStart_Human_01",
+   "x": 1136.9,
+   "z": -1235.7,
+   "yaw": 0.0
+  },
+  {
+   "team": "Cent",
+   "idx": 7,
+   "name": "StrategyStart_Human_09",
+   "x": 1187.0,
+   "z": -316.2,
+   "yaw": 180.0
+  },
+  {
+   "team": "Cent",
+   "idx": 8,
+   "name": "StrategyStart_Human_11",
+   "x": -687.2,
+   "z": 36.5,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 9,
+   "name": "StrategyStart_Human_08",
+   "x": 476.1,
+   "z": -447.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 10,
+   "name": "StrategyStart_Human_06",
+   "x": -526.5,
+   "z": 551.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 11,
+   "name": "StrategyStart_Human_02",
+   "x": 1230.4,
+   "z": 375.5,
+   "yaw": 270.0
+  },
+  {
+   "team": "Cent",
+   "idx": 12,
+   "name": "StrategyStart_Human_10",
+   "x": -446.2,
+   "z": -653.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Cent",
+   "idx": 13,
+   "name": "StrategyStart_Human_07",
+   "x": 476.1,
+   "z": 551.0,
+   "yaw": 90.0
+  },
+  {
+   "team": "Alien",
+   "idx": 0,
+   "name": "StrategyStart_Alien_23",
+   "x": -1265.6,
+   "z": -738.1,
+   "yaw": 332.7
+  },
+  {
+   "team": "Alien",
+   "idx": 1,
+   "name": "StrategyStart_Alien_12",
+   "x": -173.3,
+   "z": -951.4,
+   "yaw": 17.3
+  },
+  {
+   "team": "Alien",
+   "idx": 2,
+   "name": "StrategyStart_Alien_02",
+   "x": -958.8,
+   "z": 1225.0,
+   "yaw": 180.0
+  },
+  {
+   "team": "Alien",
+   "idx": 3,
+   "name": "StrategyStart_Alien_10",
+   "x": 759.2,
+   "z": -49.6,
+   "yaw": 0.2
+  },
+  {
+   "team": "Alien",
+   "idx": 4,
+   "name": "StrategyStart_Alien_04",
+   "x": -640.4,
+   "z": -347.5,
+   "yaw": 2.4
+  },
+  {
+   "team": "Alien",
+   "idx": 5,
+   "name": "StrategyStart_Alien_01",
+   "x": 804.3,
+   "z": 1039.6,
+   "yaw": 359.9
+  },
+  {
+   "team": "Alien",
+   "idx": 6,
+   "name": "StrategyStart_Alien_16",
+   "x": -1035.6,
+   "z": 399.7,
+   "yaw": 4.1
+  },
+  {
+   "team": "Alien",
+   "idx": 7,
+   "name": "StrategyStart_Alien_07",
+   "x": -503.4,
+   "z": 647.3,
+   "yaw": 2.6
+  },
+  {
+   "team": "Alien",
+   "idx": 8,
+   "name": "StrategyStart_Alien_11",
+   "x": 156.9,
+   "z": -900.7,
+   "yaw": 8.2
+  },
+  {
+   "team": "Alien",
+   "idx": 9,
+   "name": "StrategyStart_Alien_21",
+   "x": 595.2,
+   "z": 86.0,
+   "yaw": 9.9
+  },
+  {
+   "team": "Alien",
+   "idx": 10,
+   "name": "StrategyStart_Alien_08",
+   "x": -36.0,
+   "z": 84.2,
+   "yaw": 2.8
+  },
+  {
+   "team": "Alien",
+   "idx": 11,
+   "name": "StrategyStart_Alien_18",
+   "x": -130.6,
+   "z": 458.2,
+   "yaw": 22.6
+  },
+  {
+   "team": "Alien",
+   "idx": 12,
+   "name": "StrategyStart_Alien_05",
+   "x": 509.3,
+   "z": -376.7,
+   "yaw": 2.1
+  },
+  {
+   "team": "Alien",
+   "idx": 13,
+   "name": "StrategyStart_Alien_03",
+   "x": -1013.2,
+   "z": -927.8,
+   "yaw": 0.0
+  },
+  {
+   "team": "Alien",
+   "idx": 14,
+   "name": "StrategyStart_Alien_13",
+   "x": 154.8,
+   "z": 991.9,
+   "yaw": 19.6
+  },
+  {
+   "team": "Alien",
+   "idx": 15,
+   "name": "StrategyStart_Alien_22",
+   "x": -889.7,
+   "z": -344.0,
+   "yaw": 334.1
+  },
+  {
+   "team": "Alien",
+   "idx": 16,
+   "name": "StrategyStart_Alien_19",
+   "x": -519.1,
+   "z": 1079.2,
+   "yaw": 16.4
+  },
+  {
+   "team": "Alien",
+   "idx": 17,
+   "name": "StrategyStart_Alien_06",
+   "x": 544.2,
+   "z": 442.2,
+   "yaw": 2.6
+  },
+  {
+   "team": "Alien",
+   "idx": 18,
+   "name": "StrategyStart_Alien_24",
+   "x": -735.6,
+   "z": -1056.1,
+   "yaw": 327.6
+  },
+  {
+   "team": "Alien",
+   "idx": 19,
+   "name": "StrategyStart_Alien_14",
+   "x": 1315.3,
+   "z": -20.7,
+   "yaw": 19.6
+  },
+  {
+   "team": "Alien",
+   "idx": 20,
+   "name": "StrategyStart_Alien_20",
+   "x": 301.3,
+   "z": 531.4,
+   "yaw": 16.7
+  },
+  {
+   "team": "Alien",
+   "idx": 21,
+   "name": "StrategyStart_Alien",
+   "x": 1349.4,
+   "z": 950.8,
+   "yaw": 86.5
+  },
+  {
+   "team": "Alien",
+   "idx": 22,
+   "name": "StrategyStart_Alien_09",
+   "x": -30.6,
+   "z": -312.3,
+   "yaw": 288.3
+  },
+  {
+   "team": "Alien",
+   "idx": 23,
+   "name": "StrategyStart_Alien_17",
+   "x": -392.9,
+   "z": 244.2,
+   "yaw": 3.6
+  },
+  {
+   "team": "Alien",
+   "idx": 24,
+   "name": "StrategyStart_Alien",
+   "x": 647.6,
+   "z": -1062.7,
+   "yaw": 0.1
+  },
+  {
+   "team": "Alien",
+   "idx": 25,
+   "name": "StrategyStart_Alien_15",
+   "x": -758.5,
+   "z": 157.7,
+   "yaw": 4.9
+  }
+ ],
+ "grid": {
+  "scan_min_x": -1500,
+  "scan_max_x": 1500,
+  "scan_min_z": -1500,
+  "scan_max_z": 1500,
+  "step": 15,
+  "grid_w": 201,
+  "grid_h": 201
+ },
+ "site_code": {
+  "bit0": "valid",
+  "bits1_3": "reason",
+  "bit4": "terrain_rule",
+  "bit5": "game_rule",
+  "bit6": "no_static_overlap",
+  "bit7": "navmesh",
+  "reasons": [
+   "ok",
+   "offmap",
+   "ground_terrain",
+   "ground_static",
+   "on_static",
+   "overlap",
+   "navmesh",
+   "no_data"
+  ]
+ },
+ "open_code": {
+  "bit0": "vehicle_ok",
+  "bit1": "alien_ok",
+  "bit2": "ground",
+  "bit3": "on_static",
+  "bit4": "vehicle_overlap",
+  "bit5": "vehicle_nav_fail",
+  "bit6": "alien_nav_fail",
+  "bit7": "alien_overlap"
+ },
+ "surf": {
+  "hmin": 17.5,
+  "hmax": 259.2,
+  "decode": "v = R*256+G; v == 0: no data; y = hmin + (v-1)/65534*(hmax-hmin)"
+ },
+ "structures": [
+  "Sol: 'Headquarters' prefab Sol_Headquarters, rule ConstructionData_Sol_Headquarters (snap XZ 15 Y 1, rotateToSurface False max 30, above 35, below 22, entries 0), 647 collider boxes, union 107.2x142.1x142.2 c(0.1,-17.6,0.6), PhysicalBounds 107.2x142.1x142.2 c(0.1,-17.6,0.6), footprint x[-53.5,53.7] z[-70.5,71.7], clip y>-4.35, nav graph 'Small Vehicle' slack 0.0 main area 13958 (57508 walkable nodes, 1927 components, top: area 13958=43530, area 15698=251, area 13982=224, area 15879=221)",
+  "Cent: 'Headquarters' prefab Cent_Headquarters, rule ConstructionData_Cent_Headquarters (snap XZ 15 Y 1, rotateToSurface False max 30, above 21, below 16, entries 0), 571 collider boxes, union 109.0x132.0x131.9 c(0.4,-17.9,2.4), PhysicalBounds 109.0x132.0x131.9 c(0.4,-17.9,2.4), footprint x[-54.1,54.9] z[-63.6,68.3], clip y>-3.00, nav graph 'Small Vehicle' slack 0.0 main area 13958 (57508 walkable nodes, 1927 components, top: area 13958=43530, area 15698=251, area 13982=224, area 15879=221)",
+  "Alien: 'Nest' prefab Alien_Nest, rule ConstructionData_Alien_Nest (snap XZ 5 Y 1, rotateToSurface True max 30, above 15, below 15, entries 0), 324 collider boxes, union 52.2x18.9x47.4 c(-1.2,4.3,2.7), PhysicalBounds 52.2x22.9x47.4 c(-1.2,3.9,2.7), footprint x[-27.3,24.9] z[-21.0,26.4], clip y>1.01, nav graph 'Voxel Graph' slack 6.2 main area 1 (410200 walkable nodes, 659 components, top: area 1=374939, area 162=1668, area 326=1254, area 259=940)"
+ ],
+ "probes": {
+  "vehicle": "half(4.31,1.63,5.97) 'Platoon Hauler' 19 colliders 6.6x3.3x9.9 (+1 m per side); graph 'Small Vehicle' main 13958 slack 0.0",
+  "alien": "half(3.00,2.00,3.00) 'Shocker' 1 colliders 4.0x4.0x4.0 (+1 m per side); graph 'Voxel Graph' main 1 slack 6.2"
+ },
+ "scan": {
+  "Time": "2026-11-12 19:16:35",
+  "Map": "CrystalChasm",
+  "Mod": "Si_MapBalance 3.6.0",
+  "Game": "Release:1.0.17",
+  "Terrain": "(-1500,0,-1500) size (3000,260,3000) tiles 1",
+  "FogOfWarBounds": "min(-1540,-1540) max(1540,1540)",
+  "Params": "ground_tol 8 overlap_depth 3 on_static_max 4 on_static_fails False clip_above_lowest_point 0.5 nav_margin 12 nav_min_probes 2 nav_max_h 6 nav_max_v 4",
+  "Cells": "40401",
+  "Open vehicle": "28837  Open alien: 40056",
+  "Scan time": "574 s"
+ },
+ "valid_counts": {
+  "Sol": {
+   "r000": 16337,
+   "r090": 16475,
+   "r180": 16485,
+   "r270": 16626
+  },
+  "Cent": {
+   "r000": 20488,
+   "r090": 21576,
+   "r180": 21719,
+   "r270": 21671
+  },
+  "Alien": {
+   "r000": 39135,
+   "r090": 39182,
+   "r180": 39150,
+   "r270": 39205
+  }
+ },
+ "open_counts": {
+  "vehicle_ok": 28837,
+  "alien_ok": 40056
+ }
+}

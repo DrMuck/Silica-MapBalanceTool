@@ -131,6 +131,7 @@
       if (res.stats && res.stats.kitRange) result.stats.kitRange = res.stats.kitRange;
       // spec 15.4: same ctx for every run, so every run reports the same placeability
       if (res.stats && res.stats.placeability) result.stats.placeability = res.stats.placeability;
+      if (res.stats && res.stats.sites) result.stats.sites = res.stats.sites;   // spec 17 (absent when off)
       if (res.stats && res.stats.distinctness != null) result.stats.distinctness = res.stats.distinctness;
       if (res.infeasible) {
         result.stats.runsInfeasible++;

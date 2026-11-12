@@ -352,10 +352,86 @@
     // spec 15.4: eligibility per patch (null = setting off; nothing else changes then)
     const place = buildPlace(raw, s, patches);
     if (place) ctx.place = place;
+    // spec 17: base sites (null = setting off; nothing else changes then)
+    const sites = buildSites(raw, s, scan);
+    if (sites) ctx.sites = sites;
     G().build(ctx, settings);
     return ctx;
   }
 
+  // ── base sites (spec 17, docs/SITE_SCAN.md) ──────────────────────────────
+
+  // js/sites.js: required in Node, the global Sites in the browser / worker (looked up at call time)
+  function S() {
+    if (root && root.Sites) return root.Sites;
+    /* global require */
+    return typeof require === 'function' ? require('../sites.js') : null;
+  }
+
+  // Structures that can stand at a human start: both HQs in every mode (swap on: either HQ;
+  // hva: one position for both; swap off: the stricter rule keeps the start valid either way)
+  const SITE_STRUCTS = { human: ['Sol', 'Cent'], alien: ['Alien'] };
+
+  /** settings.sites.enabled (absent / null / false = off). */
+  function sitesOn(settings) {
+    return !!(settings && settings.sites && settings.sites.enabled);
+  }
+
+  /**
+   * ctx.sites from GenRaw.sites (a Sites SiteData of the map) when settings.sites is on:
+   * {enabled, sd, structs, mask: {human, alien}: Uint8Array per scan cell (1 = some yaw valid for
+   * every structure of the role), minOpen: {human, alien}, open: Map cache}. Missing data turns the
+   * feature off for the map ({enabled: false, missing: true} plus a console warning).
+   */
+  function buildSites(raw, settings, scan) {
+    if (!sitesOn(settings)) return null;
+    const sd = raw.sites, Sm = S();
+    const g = sd && sd.meta && sd.meta.grid;
+    if (!sd || !Sm || !g || g.grid_w !== scan.w || g.grid_h !== scan.h || g.scan_min_x !== scan.minX || g.scan_max_z !== scan.maxZ || g.step !== scan.step) {
+      if (typeof console !== 'undefined') console.warn(`GenContext.build(${raw.mapName}): no base site data on the scan grid; base sites off for this map`);
+      return { enabled: false, missing: true };
+    }
+    const mask = { human: Sm.anyValidMask(sd, SITE_STRUCTS.human), alien: Sm.anyValidMask(sd, SITE_STRUCTS.alien) };
+    return {
+      enabled: true, sd, structs: SITE_STRUCTS, mask,
+      minOpen: { human: Sm.lowOpenLimit('Sol'), alien: Sm.lowOpenLimit('Alien') },
+      open: new Map(), lowOpen: { human: 0, alien: 0 },
+    };
+  }
+
+  function sitesActive(ctx) { return !!(ctx && ctx.sites && ctx.sites.enabled); }
+
+  /** Base site rule at scan cell (px, py) for a role: some yaw valid for its structures (true when off). */
+  function siteValid(ctx, role, px, py) {
+    if (!sitesActive(ctx)) return true;
+    return ctx.sites.mask[role === 'alien' ? 'alien' : 'human'][py * ctx.scan.w + px] === 1;
+  }
+
+  /** Open ground around a start (SITE_SCAN.md 7): open_reach >= 0.50 (HQ) / 0.25 (Nest); cached; true when off. */
+  function siteOpenOk(ctx, role, px, py) {
+    if (!sitesActive(ctx)) return true;
+    const st = ctx.sites, key = (role === 'alien' ? 'a' : 'h') + (py * ctx.scan.w + px);
+    let ok = st.open.get(key);
+    if (ok === undefined) {
+      const x = ctx.scan.minX + px * ctx.scan.step, z = ctx.scan.maxZ - py * ctx.scan.step;
+      const o = S().openness(st.sd, role === 'alien' ? 'Alien' : 'Sol', x, z);
+      ok = !!o && o.reach >= st.minOpen[role === 'alien' ? 'alien' : 'human'];
+      st.open.set(key, ok);
+    }
+    return ok;
+  }
+
+  /** "rot" for a start at scan cell (px, py): the best yaw valid for every structure of the role
+   *  (SITE_SCAN.md 8: most margin, then closest to the start point yaw), undefined when off / none. */
+  function siteRot(ctx, role, px, py) {
+    if (!sitesActive(ctx)) return undefined;
+    const st = ctx.sites, Sm = S(), structs = st.structs[role === 'alien' ? 'alien' : 'human'];
+    const x = ctx.scan.minX + px * ctx.scan.step, z = ctx.scan.maxZ - py * ctx.scan.step;
+    const ys = Sm.bestYaws(st.sd, structs, px, py, Sm.todayYaw(st.sd, structs[0], x, z).yaw);
+    return ys.length ? ys[0].rot : undefined;
+  }
+
   return { build, defaultSettings, resourceList, placeOn, placeRequired, placeMask, placeNGood, placeStats, PLACE_MIN_GOOD,
-    HQ_FOOT, eligibleAt, setMask, placeNEff, countFree, sideMask, sideFactions };
+    HQ_FOOT, eligibleAt, setMask, placeNEff, countFree, sideMask, sideFactions,
+    sitesOn, sitesActive, siteValid, siteOpenOk, siteRot };
 }));

@@ -13,6 +13,8 @@ Reads raw dump/scan files from UserData\\MapBalance\\ and produces:
 Usage:
     python preprocess.py                # Process all maps with scan data
     python preprocess.py GreatErg       # Process single map
+    python preprocess.py --sites [Map ...] [--site-dir DIR]
+                                        # only data/sites/* from the base site scan (docs/SITE_SCAN.md)
 """
 
 import sys
@@ -780,6 +782,167 @@ def generate_refinery_layers(map_name, faction, resources=None):
     return placeable
 
 
+SITE_SCAN_DIR = SCAN_DIR / "site_scan"
+SITE_KEYS = ("Sol", "Cent", "Alien")
+SITE_YAWS = (0, 90, 180, 270)
+SITE_REASONS = ["ok", "offmap", "ground_terrain", "ground_static", "on_static", "overlap", "navmesh", "no_data"]
+
+
+def _png_plain(img, path):
+    """Save without gAMA/sRGB chunks (PIL writes none for these modes unless asked)."""
+    img.save(str(path), optimize=True)
+
+
+def generate_site_layers(map_name, scan_dir=None):
+    """Base site scan (Si_MapBalance 3.6.0 site scan mode) -> data/sites/ (spec: docs/SITE_SCAN.md).
+
+    Reads the newest site_scan_<Map>_*.txt and writes, on the scan grid (row 0 = north):
+      site_<Sol|Cent|Alien>_<Map>_r<000|090|180|270>.png  8-bit grayscale, pixel = site code byte
+      open_<Map>.png                                       8-bit grayscale, pixel = open-ground bits
+      surf_<Map>.png                                       opaque RGB, 16-bit surface height R/G (0 = none)
+      site_meta_<Map>.json                                 grid, code legend, structures, probes, counts
+    Existing masks (data/masks/hq_*.png) are not touched.
+    """
+    sdir = Path(scan_dir) if scan_dir else SITE_SCAN_DIR
+    files = glob.glob(str(sdir / f"site_scan_{map_name}_*.txt"))
+    if not files:
+        print(f"  [WARN] No site scan for {map_name} in {sdir}")
+        return None
+    scan_file = max(files, key=os.path.getmtime)
+
+    header = {}
+    structures, probes, extra = [], {}, {}
+    csv_start = None
+    with open(scan_file, 'r', encoding='utf-8-sig') as f:
+        lines = f.readlines()
+    for i, line in enumerate(lines):
+        line = line.rstrip('\n')
+        m = re.match(r'Scan: X=\[([-\d]+),([-\d]+)\] Z=\[([-\d]+),([-\d]+)\] step=(\d+)', line)
+        if m:
+            header.update(min_x=int(m.group(1)), max_x=int(m.group(2)), min_z=int(m.group(3)),
+                          max_z=int(m.group(4)), step=int(m.group(5)))
+        elif line.startswith("Structure "):
+            structures.append(line[len("Structure "):])
+        elif line.startswith("Probe "):
+            k, _, v = line[len("Probe "):].partition(": ")
+            probes[k] = v
+        elif re.match(r'(Time|Map|Mod|Game|Terrain|Params|FogOfWarBounds|Scan time|Cells|Open vehicle): ', line):
+            k, _, v = line.partition(": ")
+            extra[k] = v
+        elif line.startswith("=== CSV DATA"):
+            csv_start = i + 2
+            break
+    if csv_start is None or 'step' not in header:
+        print(f"  [WARN] Malformed site scan {scan_file}")
+        return None
+
+    step = header['step']
+    min_x, max_z = header['min_x'], header['max_z']
+    grid_w = (header['max_x'] - min_x) // step + 1
+    grid_h = (max_z - header['min_z']) // step + 1
+
+    # x,z,sy,s000,s090,s180,s270,c000,c090,c180,c270,n000,n090,n180,n270,o,vy,ay
+    def num(s):
+        return float(s) if s.strip() != '' else np.nan
+    rows = [l.rstrip('\n').split(',') for l in lines[csv_start:] if l.strip()]
+    data = np.array([[num(v) for v in r[:18]] for r in rows if len(r) >= 16], dtype=np.float64)
+    gx = np.rint((data[:, 0] - min_x) / step).astype(np.int64)
+    gy = np.rint((max_z - data[:, 1]) / step).astype(np.int64)
+    inside = (gx >= 0) & (gx < grid_w) & (gy >= 0) & (gy < grid_h)
+    gx, gy, data = gx[inside], gy[inside], data[inside]
+
+    # Scan format 1 (Si_MapBalance 3.6.0 before the Nest rule change) failed the Nest on the ground rule.
+    # Since format 2 the Nest's ground result is info only. Every test was evaluated in format 1 too, so
+    # the new code follows from the flag bits: reason = overlap if bit 6 is clear, else navmesh if bit 7 is
+    # clear, else valid. Idempotent (format 2 files never carry a ground reason for the Nest).
+    scan_version = 1
+    mv = re.search(r'=== Base Site Scan v(\d+)', ''.join(lines[:3]))
+    if mv:
+        scan_version = int(mv.group(1))
+    nest_fixed = 0
+    for ri in range(4):
+        col = 3 + 2 * 4 + ri
+        c = data[:, col].astype(np.int64)
+        reason = (c >> 1) & 7
+        sel = (reason == 2) | (reason == 3)
+        if sel.any():
+            newr = np.where((c & 0x40) == 0, 5, np.where((c & 0x80) == 0, 6, 0))
+            nc = (c & 0xF0) | (newr << 1) | (newr == 0).astype(np.int64)
+            data[sel, col] = nc[sel]
+            nest_fixed += int(sel.sum())
+
+    out_dir = DATA_DIR / "sites"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    counts = {}
+    for si, key in enumerate(SITE_KEYS):
+        counts[key] = {}
+        for ri, yaw in enumerate(SITE_YAWS):
+            grid = np.zeros((grid_h, grid_w), dtype=np.uint8)
+            grid[gy, gx] = data[:, 3 + si * 4 + ri].astype(np.uint8)
+            _png_plain(Image.fromarray(grid, mode='L'), out_dir / f"site_{key}_{map_name}_r{yaw:03d}.png")
+            counts[key][f"r{yaw:03d}"] = int(np.count_nonzero(grid & 1))
+    og = np.zeros((grid_h, grid_w), dtype=np.uint8)
+    og[gy, gx] = data[:, 15].astype(np.uint8)
+    _png_plain(Image.fromarray(og, mode='L'), out_dir / f"open_{map_name}.png")
+
+    sy = data[:, 2]
+    ok = np.isfinite(sy)
+    hmin = float(np.nanmin(sy)) if ok.any() else 0.0
+    hmax = float(np.nanmax(sy)) if ok.any() else 1.0
+    span = max(hmax - hmin, 1e-3)
+    v = np.zeros(len(sy), dtype=np.int64)
+    v[ok] = np.rint((sy[ok] - hmin) / span * 65534).astype(np.int64) + 1
+    rgb = np.zeros((grid_h, grid_w, 3), dtype=np.uint8)
+    rgb[gy, gx, 0] = (v >> 8).astype(np.uint8)
+    rgb[gy, gx, 1] = (v & 0xFF).astype(np.uint8)
+    _png_plain(Image.fromarray(rgb, mode='RGB'), out_dir / f"surf_{map_name}.png")
+
+    # Vanilla start points (position + yaw per team) from the scan's site_startpoints_<Map>_*.csv, so the
+    # rotation the mod uses without a layout "rot" (nearest start point of the team) resolves offline.
+    start_points = []
+    sp_files = glob.glob(str(sdir / f"site_startpoints_{map_name}_*.csv"))
+    if sp_files:
+        import csv as _csv
+        seen = set()
+        with open(max(sp_files, key=os.path.getmtime), newline='', encoding='utf-8-sig') as f:
+            for r in _csv.DictReader(f):
+                k = (r["team"], r["idx"])
+                if k in seen:
+                    continue
+                seen.add(k)
+                start_points.append({"team": r["team"], "idx": int(r["idx"]), "name": r["name"],
+                                     "x": round(float(r["x"]), 1), "z": round(float(r["z"]), 1),
+                                     "yaw": round(float(r["yaw"]) % 360, 1)})
+    else:
+        print(f"  [WARN] No site_startpoints for {map_name}: meta without start points")
+
+    meta = {
+        "map": map_name, "version": 2, "source": os.path.basename(scan_file),
+        "scan_format": scan_version, "nest_ground_rule": "info",
+        "nest_codes_normalized": nest_fixed,
+        "start_points": start_points,
+        "grid": {"scan_min_x": min_x, "scan_max_x": header['max_x'], "scan_min_z": header['min_z'],
+                 "scan_max_z": max_z, "step": step, "grid_w": int(grid_w), "grid_h": int(grid_h)},
+        "site_code": {"bit0": "valid", "bits1_3": "reason", "bit4": "terrain_rule", "bit5": "game_rule",
+                      "bit6": "no_static_overlap", "bit7": "navmesh", "reasons": SITE_REASONS},
+        "open_code": {"bit0": "vehicle_ok", "bit1": "alien_ok", "bit2": "ground", "bit3": "on_static",
+                      "bit4": "vehicle_overlap", "bit5": "vehicle_nav_fail", "bit6": "alien_nav_fail",
+                      "bit7": "alien_overlap"},
+        "surf": {"hmin": round(hmin, 3), "hmax": round(hmax, 3),
+                 "decode": "v = R*256+G; v == 0: no data; y = hmin + (v-1)/65534*(hmax-hmin)"},
+        "structures": structures, "probes": probes, "scan": extra,
+        "valid_counts": counts,
+        "open_counts": {"vehicle_ok": int(np.count_nonzero(og & 1)), "alien_ok": int(np.count_nonzero(og & 2))},
+    }
+    with open(out_dir / f"site_meta_{map_name}.json", 'w') as f:
+        json.dump(meta, f, indent=1)
+    print(f"  [OK] Site layers {map_name}: {grid_w}x{grid_h}, valid " +
+          ", ".join(f"{k} {'/'.join(str(c) for c in counts[k].values())}" for k in SITE_KEYS) +
+          f", open vehicle {meta['open_counts']['vehicle_ok']} alien {meta['open_counts']['alien_ok']}"
+          f" <- {os.path.basename(scan_file)}")
+    return meta
+
+
 def discover_all_data_maps():
     """Find all maps that have processed resource JSON data on disk."""
     res_dir = DATA_DIR / "resources"
@@ -921,6 +1084,10 @@ def process_map(map_name):
               f"both {len(sol & cent)} / neither {n_balt - len(sol | cent)}")
     result["placeable"] = placeable
 
+    # 8. Base site layers (Si_MapBalance 3.6.0 site scan, docs/SITE_SCAN.md); skipped without a scan
+    print("\n[8] Base site layers:")
+    generate_site_layers(map_name)
+
     return result
 
 
@@ -929,6 +1096,23 @@ def main():
     for subdir in ["maps", "resources", "masks", "refineries", "ramps"]:
         (DATA_DIR / subdir).mkdir(parents=True, exist_ok=True)
     (SCRIPT_DIR / "js").mkdir(parents=True, exist_ok=True)
+
+    # Site layers only (docs/SITE_SCAN.md): python preprocess.py --sites [Map ...] [--site-dir DIR]
+    if "--sites" in sys.argv:
+        args = [a for a in sys.argv[1:] if a != "--sites"]
+        site_dir = None
+        if "--site-dir" in args:
+            i = args.index("--site-dir")
+            site_dir = args[i + 1]
+            del args[i:i + 2]
+        if not args:
+            sdir = Path(site_dir) if site_dir else SITE_SCAN_DIR
+            args = sorted({re.match(r'site_scan_(.+)_\d{8}_\d{6}\.txt', os.path.basename(p)).group(1)
+                           for p in glob.glob(str(sdir / "site_scan_*_*.txt"))})
+        print(f"Site layers for: {', '.join(args)}")
+        for map_name in args:
+            generate_site_layers(map_name, site_dir)
+        return
 
     # Determine which maps to process
     if len(sys.argv) > 1:
